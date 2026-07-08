@@ -1,0 +1,28 @@
+---
+name: model-routing
+description: Model routing policy for token efficiency. Use when spawning subagents, choosing a model for an agent/workflow, or editing model pins in @claude GitHub workflow files.
+---
+
+# Model routing (token efficiency)
+
+Route agent work to the cheapest capable model. Always set the model
+explicitly: an omitted model silently inherits an expensive default.
+
+- **Haiku**: implementers executing fully-specified plan tasks (the plan
+  contains the complete code; the job is transcription plus running tests).
+- **Sonnet**: fix subagents, task reviewers, GitHub routines, and the
+  interactive @claude Actions responder (`--model claude-sonnet-5
+  --max-turns 10`). Judgment work needs at least mid-tier: turn count beats
+  token price. An under-modeled agent that takes 3x the turns costs more
+  than a capable one.
+- **Opus**: research sweeps, architecture/design work, and the auto PR-review
+  workflow (runs once per PR; review depth matters).
+- **Most capable model**: session controller and the final whole-branch
+  review only.
+
+Escalate one level when a task is BLOCKED or produces repeated review
+findings; never escalate by default.
+
+Workflow pins live in `.github/workflows/claude.yml` (Sonnet, turn-capped)
+and `.github/workflows/claude-code-review.yml` (Opus). Keep pins and this
+policy in sync when either changes.

@@ -1,0 +1,48 @@
+name: Claude Code
+
+on:
+  issue_comment:
+    types: [created]
+  pull_request_review_comment:
+    types: [created]
+  issues:
+    types: [opened, assigned]
+  pull_request_review:
+    types: [submitted]
+
+jobs:
+  claude:
+    if: |
+      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+      actions: read # Required for Claude to read CI results on PRs
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code
+        id: claude
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Model policy: see the factory:model-routing skill. Sonnet for
+          # responder work, turn-capped. Escalate per-issue by writing
+          # "use opus" in the issue body if needed.
+          claude_args: '--model claude-sonnet-5 --max-turns 10'
+          # The Action does not load the repo's .claude/settings.json (it is
+          # stripped from the runner's checkout), so plugins must be
+          # self-loaded via these inputs rather than relying on settings.json.
+          plugin_marketplaces: 'https://github.com/onurcelep/ai-factory.git'
+          plugins: 'factory@onur'
+          additional_permissions: |
+            actions: read

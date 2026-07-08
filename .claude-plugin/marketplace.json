@@ -1,0 +1,11 @@
+{
+  "name": "onur",
+  "owner": { "name": "Onur Celep" },
+  "plugins": [
+    {
+      "name": "factory",
+      "source": "./plugins/factory",
+      "description": "Personal standard AI-dev setup: init/update stamps plus shared skills (model routing, release flow)."
+    }
+  ]
+}
