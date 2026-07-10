@@ -39,6 +39,9 @@ overwrites existing content silently.
 
 ## Prerequisites
 
+`/factory-init` checks all of these in its preflight and prints the fix
+for anything missing — reading ahead just saves the round trip.
+
 | Requirement | Why | Verify |
 |---|---|---|
 | [Claude Code](https://claude.com/claude-code) CLI, logged in | runs the skills; installs the plugins at session start | `claude --version` |

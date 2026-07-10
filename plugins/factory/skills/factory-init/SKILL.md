@@ -9,14 +9,23 @@ Stamp this repository with the ai-factory standard. Templates live in
 `${CLAUDE_PLUGIN_ROOT}/templates/`. Follow the steps in order; never
 overwrite existing content without showing a diff and getting confirmation.
 
-## 1. Preflight (abort with a clear message if any fails)
+## 1. Preflight — check the prerequisites
 
-- `git rev-parse --is-inside-work-tree` succeeds; otherwise say "not a git
-  repo, run git init first" and stop.
-- `gh auth status` succeeds (needed for the manual-steps checklist; if it
-  fails, continue stamping but flag it).
-- Note the repo slug from `gh repo view --json nameWithOwner -q .nameWithOwner`
-  (no remote is fine; the App/secret steps just move to the checklist).
+Run every check below, then show the results as a pass/fail list that
+includes the fix command for each failure (users skip READMEs; this
+report is where they find out what is missing). Only the first check
+aborts; everything else continues with a flag.
+
+| Check | How | On failure |
+|---|---|---|
+| Git repo | `git rev-parse --is-inside-work-tree` | ABORT: "not a git repo, run git init first" |
+| `gh` CLI installed and authenticated | `gh auth status` | flag: install the gh CLI, then `gh auth login`; the secret and App checks below move to the checklist |
+| Repo hosted on GitHub | `gh repo view --json nameWithOwner -q .nameWithOwner` | flag: the stamped workflows only run once the repo is pushed to GitHub; App/secret steps stay on the checklist |
+| Auth secret set | `gh secret list` contains `CLAUDE_CODE_OAUTH_TOKEN` | flag: generate with `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN` |
+| Claude GitHub App installed | best effort: `gh api /user/installations` lists an entry with `"app_slug": "claude"` whose repository list covers this repo; if the API cannot answer, report "could not verify" | flag: install https://github.com/apps/claude on the repo or org |
+
+A repo that is not on GitHub yet still gets stamped — the flagged items
+simply stay on the manual checklist at the end.
 
 ## 2. Stamp the fixed files
 
@@ -75,6 +84,8 @@ end: `<!-- factory:standard:end -->`
   to refresh" and touch nothing.
 
 ## 5. Manual-steps checklist (print at the end)
+
+Include only the items the preflight flagged, plus the review step:
 
 1. Install the Claude GitHub App on this repo: https://github.com/apps/claude
 2. Set the auth secret: `gh secret set CLAUDE_CODE_OAUTH_TOKEN`
