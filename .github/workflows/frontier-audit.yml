@@ -39,6 +39,6 @@ jobs:
           claude_args: |
             --model claude-fable-5
             --max-turns 60
-            --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh)
+            --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh),Bash(echo:*)
           prompt: |
             Read .github/prompts/frontier-audit.md and follow it exactly.
