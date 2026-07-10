@@ -16,7 +16,12 @@ state of the art, and to open one focused PR that catches them up.
 
 ## 2. Research the current frontier
 
-Use WebSearch and WebFetch. Prioritize primary sources:
+Fan the mechanical source sweep out to parallel subagents (Task tool) on a
+cheaper model — pass `model: sonnet` — one collector per source below, each
+returning raw dated facts (versions, changed inputs, new capabilities,
+deprecations), not conclusions. Keep all judgment in this loop: read their
+returns yourself, and dispatch a follow-up collector when something needs a
+deeper look. Prioritize primary sources:
 
 - Claude Code changelog and release notes
   (github.com/anthropics/claude-code) — new features, deprecations.
@@ -49,10 +54,15 @@ make part of ai-factory's machinery unnecessary. These mission-level
 findings are often the most valuable output of the audit, but they follow a
 different path — see "Architectural proposals" below.
 
-## 4. Decide
+## 4. Decide — and report before you build
 
 If nothing meets the bar, stop: do not push, do not open a PR. Your report
 (see "Report every run" below) is the run's only output in that case.
+
+Either way, write the report to `$GITHUB_STEP_SUMMARY` NOW, before
+implementing anything — a report without PR links beats no report when
+turns run out mid-implementation. Append the PR/issue links at the end if
+you open any.
 
 ## 5. Apply and open the PR
 
@@ -61,6 +71,12 @@ If nothing meets the bar, stop: do not push, do not open a PR. Your report
   do not open another — comment on it with any new findings and stop.
 - Branch from the default branch: `frontier-audit/<YYYY-MM-DD>`.
 - Make the changes. Run `./scripts/validate.sh` and fix anything it flags.
+- You cannot push anything under `.github/workflows/` — your token lacks
+  the workflow scope and the push will be rejected. Never edit files there.
+  When you change a template that has a dogfooded copy in
+  `.github/workflows/`, expect `validate.sh` to fail on your branch with a
+  drift error: state in the PR body that this is expected and include the
+  exact `cp` + commit commands for the maintainer to sync it.
 - Commit with clear messages, push the branch, and open the PR. Ensure the
   label exists (`gh label create frontier-audit --description "weekly
   frontier audit" --color 5319e7 || true`), then apply it to the PR.
