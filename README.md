@@ -10,6 +10,54 @@ instead of hand-copying workflows and CLAUDE.md prose.
 - Works with any repo — nothing here is coupled to a specific consumer.
 - Design spec: [`docs/superpowers/specs/2026-07-08-ai-factory-design.md`](docs/superpowers/specs/2026-07-08-ai-factory-design.md)
 
+## Why this exists
+
+Every repo that works with Claude agents needs the same setup: the two
+`@claude` workflows, plugin wiring, a secret, and the same CLAUDE.md
+prose about model routing and release discipline. Hand-copying that
+across repos is how drift happens — before this repo, the agent-enabled
+repos each carried slightly different, already-diverging variants, and
+every new project restarted from zero.
+
+Two facts shaped the design:
+
+1. **Remote agents only see the repo.** `@claude` Action runs, Claude
+   Code cloud sessions, and scheduled routines never load `~/.claude`,
+   so everything shared must be reachable *from the repo itself*:
+   plugin wiring committed per-repo, and durable knowledge (CLAUDE.md,
+   `docs/memory/`) carried by git rather than by any one machine. A new
+   or reinstalled computer needs nothing beyond `git pull` and the
+   one-time marketplace add.
+2. **Different content wants different update semantics.** Process and
+   policy (model routing, release flow, memory conventions) should
+   evolve once and propagate everywhere immediately — that is the
+   plugin layer. Files a repo must own and review (workflows,
+   CLAUDE.md) should change only deliberately and visibly — that is the
+   stamped layer, refreshed per-repo by `/factory-update`, with the
+   marker fence protecting everything the repo has learned.
+
+The repo is public so remote marketplace fetches need no token
+plumbing; it contains only config, skills, and templates — never
+secrets. Frameworks in this space (spec-kit, Agent OS, BMAD) were
+evaluated and rejected as team-oriented "work about work" for a solo
+developer — see the design spec for the full comparison. This repo is
+deliberately just files: no runtime, no DSL, nothing to maintain beyond
+what you can read in a minute.
+
+## How it is meant to be used
+
+- **New repo:** `git init`, `/factory-init`, follow the two-step
+  checklist (GitHub App install + one secret). The repo is now
+  agent-ready: `@claude` responder, auto PR review, plugin wiring,
+  memory index.
+- **Improving the standard:** edit a skill here and push — every repo
+  picks it up at its next session start. Edit a template here, then run
+  `/factory-update` in each consuming repo at your convenience.
+- **Day to day:** you never think about this repo. Consumer repos carry
+  their own rules (CLAUDE.md `## Project`) and memory (`docs/memory/`);
+  the plugin carries the shared policies; and any drift that sneaks in
+  is one `/factory-update` away from fixed.
+
 ## The two layers
 
 Everything here belongs to one of two layers with different update
