@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -30,6 +30,10 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # The action refuses runs initiated by non-human actors unless the
+          # bot is allowlisted. Machine-authored PRs (e.g. a scheduled Claude
+          # agent's proposals) are exactly the ones that must not skip review.
+          allowed_bots: 'claude'
           # Model policy: see the factory:model-routing skill. Opus for the
           # auto PR review; it runs once per PR and depth matters.
           claude_args: '--model opus'
@@ -43,4 +47,7 @@ jobs:
           plugins: |
             code-review@claude-code-plugins
             factory@onur
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # --comment is required for the findings to reach the PR: since
+          # anthropics/claude-code@6dcc7d8b (2026-02-11) the command posts
+          # nothing without it, leaving the review only in the runner log.
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
