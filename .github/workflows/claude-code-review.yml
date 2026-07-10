@@ -1,0 +1,46 @@
+name: Claude Code Review
+
+on:
+  pull_request:
+    types: [opened, synchronize, ready_for_review, reopened]
+
+# One Opus review per push burst, not per push: a new push to the PR
+# cancels the review still running for the previous push.
+concurrency:
+  group: claude-review-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  claude-review:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      pull-requests: read
+      issues: read
+      id-token: write
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Run Claude Code Review
+        id: claude-review
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Model policy: see the factory:model-routing skill. Opus for the
+          # auto PR review; it runs once per PR and depth matters.
+          claude_args: '--model opus'
+          # The Action does not load the repo's .claude/settings.json (it is
+          # stripped from the runner's checkout), so plugins must be
+          # self-loaded via these inputs rather than relying on settings.json.
+          # Both inputs are newline-separated (per claude-code-action docs).
+          plugin_marketplaces: |
+            https://github.com/anthropics/claude-code.git
+            https://github.com/onurcelep/ai-factory.git
+          plugins: |
+            code-review@claude-code-plugins
+            factory@onur
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'

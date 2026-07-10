@@ -69,6 +69,18 @@ grep -qF 'factory:standard:begin' "$FU" || fail "factory-update must document th
 grep -q 'never' "$FU" || fail "factory-update must state it never touches project content"
 ok "factory-update skill"
 
+# --- Dogfood: stamped workflow copies must match their templates ---
+# ai-factory consumes its own review workflow. Any workflow that shares a
+# basename with a template must stay byte-identical to it, so templates/
+# remains the single source of truth. Re-sync with:
+#   cp plugins/factory/templates/<name> .github/workflows/<name>
+for w in .github/workflows/*.yml; do
+  t="$T/$(basename "$w")"
+  [ -f "$t" ] || continue
+  cmp -s "$t" "$w" || fail "$(basename "$w") drifted from its template — re-copy from $T"
+done
+ok "dogfooded workflows match templates"
+
 # --- Fix: workflows must self-load the factory plugin (Action ignores repo settings.json) ---
 grep -q "factory@$MKT" plugins/factory/templates/claude.yml || fail "claude.yml template must load factory@$MKT via plugins input"
 grep -q "factory@$MKT" plugins/factory/templates/claude-code-review.yml || fail "review template must load factory@$MKT via plugins input"
