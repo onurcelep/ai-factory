@@ -3,11 +3,13 @@
 Personal Claude Code **plugin marketplace + repo templates** in one repo.
 It is the single source of truth for how AI agents (local Claude Code
 sessions, Claude Code cloud sessions, and the `@claude` GitHub Action) work
-across all of my repositories, so a new project takes one command to set up
-instead of hand-copying workflows and CLAUDE.md prose.
+across all of your repositories, so a new project takes one command to set
+up instead of hand-copying workflows and CLAUDE.md prose.
 
 - Marketplace: **`onur`** · Plugin: **`factory`**
 - Works with any repo — nothing here is coupled to a specific consumer.
+- Fork-friendly: one script repoints everything at your own fork — see
+  ["Use it as a base"](#use-it-as-a-base).
 - Design spec: [`docs/superpowers/specs/2026-07-08-ai-factory-design.md`](docs/superpowers/specs/2026-07-08-ai-factory-design.md)
 
 ## Why this exists
@@ -43,6 +45,23 @@ evaluated and rejected as team-oriented "work about work" for a solo
 developer — see the design spec for the full comparison. This repo is
 deliberately just files: no runtime, no DSL, nothing to maintain beyond
 what you can read in a minute.
+
+## The decisions, in short
+
+What a repository signs up for when it adopts ai-factory. Each row is a
+deliberate decision; the linked skill or template is its source of truth.
+
+| Decision | Lives in |
+|---|---|
+| Two GitHub workflows per repo: an interactive `@claude` responder (Sonnet, turn-capped) and an automatic once-per-PR review (Opus). Models are always pinned explicitly — an omitted model silently inherits an expensive default. | `templates/claude*.yml` |
+| Model routing by task: Haiku for fully-specified implementer tasks, Sonnet for judgment/fix/responder work, Opus for research, design, and the PR review. Escalate one level on repeated failure, never by default. | `model-routing` skill |
+| Release discipline: local work gates on `/code-review` before any push that reaches users; the remote `@claude` agent never pushes `main` and always opens a PR (its workflow runs with `contents: read`). | `release-flow` skill |
+| CLAUDE.md is layered: a marker-fenced standard block owned by `/factory-update`, and a `## Project` section owned by the repo forever — updates can never destroy repo-specific knowledge. | `templates/CLAUDE.md.tmpl` |
+| Agent memory is committed to the repo (`docs/memory/`: index + one fact per file), so local, cloud, and Action sessions share the same knowledge with zero machine state. | `repo-memory` skill |
+| Plugin wiring is redundant by design: `.claude/settings.json` covers local and cloud sessions; the workflows self-load the plugin for Action runs, which strip `settings.json`. | `templates/settings.json` + workflows |
+| superpowers is the process layer for local and cloud sessions only; it is intentionally not loaded into Action runs (context cost, no benefit for a turn-capped responder). | `templates/settings.json` |
+| One secret per consumer repo (`CLAUDE_CODE_OAUTH_TOKEN`); this repo stays public and never carries secrets. | `/factory-init` checklist |
+| `AGENTS.md` is a thin cross-tool pointer to CLAUDE.md, nothing more. | `templates/AGENTS.md.tmpl` |
 
 ## How it is meant to be used
 
@@ -220,6 +239,26 @@ claude  →  /factory-init          # stamp everything, follow the checklist
 claude  →  /factory-update        # inside each consuming repo
 ```
 
+## Use it as a base
+
+Everything functional is owner-agnostic except two strings: the GitHub
+repo slug and the marketplace name. One script rewrites both:
+
+```bash
+gh repo fork onurcelep/ai-factory --clone    # or "Use this template" on GitHub
+cd ai-factory
+./scripts/rebrand.sh <your-github-user>/ai-factory    # optional 2nd arg: marketplace name
+```
+
+The script rewrites the manifests, templates, and README, then re-runs the
+validation suite (which checks cross-file consistency, not owner literals,
+so it passes for any fork). Review the diff, optionally put your own name
+in the two manifests' owner/author fields, commit, push — then follow
+["Using it"](#using-it) with your slug. Keep the fork public: remote
+marketplace fetches need no token that way, and nothing here should ever
+contain a secret. From there the skills and templates are yours — edit the
+model pins, release rules, and templates to taste.
+
 ## Repo layout
 
 ```
@@ -242,7 +281,8 @@ ai-factory/
 │       └── MEMORY.md.tmpl
 ├── docs/superpowers/specs/             # design spec
 ├── docs/superpowers/plans/             # implementation plan (historical record)
-└── scripts/validate.sh                 # run after any change here
+├── scripts/validate.sh                 # run after any change here
+└── scripts/rebrand.sh                  # repoint a fork at your own repo
 ```
 
 ## Contributing to your own standard

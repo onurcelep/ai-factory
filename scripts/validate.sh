@@ -9,13 +9,19 @@ ok()   { echo "ok: $1"; }
 json_valid() { python3 -c "import json,sys; json.load(open(sys.argv[1]))" "$1" 2>/dev/null; }
 
 # --- Task 1: manifests ---
+# The marketplace name and repo slug are derived, not hardcoded, so the
+# suite validates any fork (see scripts/rebrand.sh) by checking cross-file
+# consistency instead of owner-specific literals.
 [ -f .claude-plugin/marketplace.json ] || fail "marketplace.json missing"
 json_valid .claude-plugin/marketplace.json || fail "marketplace.json is not valid JSON"
-grep -q '"name": "onur"' .claude-plugin/marketplace.json || fail "marketplace name must be 'onur'"
+MKT=$(python3 -c "import json; print(json.load(open('.claude-plugin/marketplace.json'))['name'])") \
+  || fail "marketplace.json must have a name"
+[ -n "$MKT" ] || fail "marketplace name must be non-empty"
+[ "$MKT" != "factory" ] || fail "marketplace name must differ from the plugin name 'factory'"
 grep -q '"name": "factory"' .claude-plugin/marketplace.json || fail "marketplace must list plugin 'factory'"
 [ -f plugins/factory/.claude-plugin/plugin.json ] || fail "plugin.json missing"
 json_valid plugins/factory/.claude-plugin/plugin.json || fail "plugin.json is not valid JSON"
-ok "manifests"
+ok "manifests (marketplace '$MKT')"
 
 # --- Task 2: shared skills ---
 for s in model-routing release-flow repo-memory factory-init factory-update; do
@@ -33,8 +39,10 @@ for f in claude.yml claude-code-review.yml settings.json CLAUDE.md.tmpl AGENTS.m
   [ -f "$T/$f" ] || fail "$T/$f missing"
 done
 json_valid "$T/settings.json" || fail "settings.json template is not valid JSON"
-grep -q 'onurcelep/ai-factory' "$T/settings.json" || fail "settings.json must reference onurcelep/ai-factory"
-grep -q 'factory@onur' "$T/settings.json" || fail "settings.json must enable factory@onur"
+SLUG=$(python3 -c "import json; print(json.load(open('$T/settings.json'))['extraKnownMarketplaces']['$MKT']['source']['repo'])" 2>/dev/null) \
+  || fail "settings.json must wire marketplace '$MKT' to a github repo"
+[ -n "$SLUG" ] || fail "settings.json marketplace '$MKT' must name a repo slug"
+grep -q "\"factory@$MKT\": true" "$T/settings.json" || fail "settings.json must enable factory@$MKT"
 grep -q 'superpowers@claude-plugins-official' "$T/settings.json" || fail "settings.json must enable superpowers"
 grep -qF '<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing begin marker"
 grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing end marker"
@@ -62,10 +70,10 @@ grep -q 'never' "$FU" || fail "factory-update must state it never touches projec
 ok "factory-update skill"
 
 # --- Fix: workflows must self-load the factory plugin (Action ignores repo settings.json) ---
-grep -q "factory@onur" plugins/factory/templates/claude.yml || fail "claude.yml template must load factory@onur via plugins input"
-grep -q "factory@onur" plugins/factory/templates/claude-code-review.yml || fail "review template must load factory@onur via plugins input"
-grep -q 'onurcelep/ai-factory' plugins/factory/templates/claude.yml || fail "claude.yml template must reference the onur marketplace URL"
-grep -q 'onurcelep/ai-factory' plugins/factory/templates/claude-code-review.yml || fail "review template must reference the onur marketplace URL"
-ok "workflow plugin self-loading"
+grep -q "factory@$MKT" plugins/factory/templates/claude.yml || fail "claude.yml template must load factory@$MKT via plugins input"
+grep -q "factory@$MKT" plugins/factory/templates/claude-code-review.yml || fail "review template must load factory@$MKT via plugins input"
+grep -q "github.com/$SLUG" plugins/factory/templates/claude.yml || fail "claude.yml template must reference the $SLUG marketplace URL"
+grep -q "github.com/$SLUG" plugins/factory/templates/claude-code-review.yml || fail "review template must reference the $SLUG marketplace URL"
+ok "workflow plugin self-loading (repo $SLUG)"
 
 echo "ALL CHECKS PASSED"

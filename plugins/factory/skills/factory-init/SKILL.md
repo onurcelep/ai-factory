@@ -32,8 +32,9 @@ If identical, report "already current" and skip.
 | `templates/MEMORY.md.tmpl` | `docs/memory/MEMORY.md` |
 
 For `.claude/settings.json`, if the target exists, MERGE instead of replace:
-add the `onur` marketplace to `extraKnownMarketplaces` and the two entries to
-`enabledPlugins`, preserving everything else in the file.
+add the template's `extraKnownMarketplaces` entry and its `enabledPlugins`
+entries (the template is the source of truth for the marketplace and plugin
+names), preserving everything else in the file.
 
 For `docs/memory/MEMORY.md`, create only if missing. If it already exists,
 leave it completely untouched — after stamping, its content (and every

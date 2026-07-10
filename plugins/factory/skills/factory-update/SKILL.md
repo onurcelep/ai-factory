@@ -22,8 +22,9 @@ This tool will never modify content outside the marker boundaries.
 Same diff-and-confirm copy as factory-init, same targets:
 `.github/workflows/claude.yml`, `.github/workflows/claude-code-review.yml`.
 For `.claude/settings.json`, merge (preserve any repo-added keys); only
-ensure the `onur` marketplace and the `factory@onur` +
-`superpowers@claude-plugins-official` plugin entries are present and current.
+ensure the template's `extraKnownMarketplaces` entry and its
+`enabledPlugins` entries are present and current (the template is the
+source of truth for the marketplace and plugin names).
 
 ## 3. Ensure the memory index exists
 
