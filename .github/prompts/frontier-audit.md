@@ -40,6 +40,15 @@ When unsure whether something is drift or a deliberate choice, check the
 design spec; if still unsure, leave it alone and record it in the PR body
 under "Considered, not changed".
 
+Then zoom out to the mission. This repo exists so that making any repo
+agent-ready stays a one-command, low-upkeep operation. For each notable new
+capability you found, ask not only "are the templates using this correctly?"
+but "does this change the best way to achieve the mission?" — a new Claude
+Code feature that could replace stamped files, collapse the update flow, or
+make part of ai-factory's machinery unnecessary. These mission-level
+findings are often the most valuable output of the audit, but they follow a
+different path — see "Architectural proposals" below.
+
 ## 4. Decide
 
 If nothing meets the bar, stop: do not push, do not open a PR. Your report
@@ -66,6 +75,19 @@ The PR description must contain, for every change:
 Plus a "Considered, not changed" section, and a list of the sources checked —
 including the ones where no drift was found.
 
+## Architectural proposals
+
+Findings that would restructure how ai-factory works never go in the PR.
+File them as a GitHub issue instead, so a human decides before any code
+moves. First check for an existing open proposal
+(`gh issue list --label frontier-proposal --state open`) — comment there
+rather than duplicating. Otherwise ensure the label exists
+(`gh label create frontier-proposal --description "mission-level proposal
+from the weekly audit" --color 0e8a16 || true`) and open one issue per
+proposal containing: the new capability (with dated references), what part
+of ai-factory it could simplify or replace, the migration sketch, and what
+would be lost. One proposal per issue; no omnibus issues.
+
 ## Report every run
 
 Whether or not you opened a PR, finish by publishing your closing summary to
@@ -76,6 +98,7 @@ the GitHub Actions run page: resolve the summary file path with
 - Sources checked, with the version/date you saw (including the ones where
   no drift was found).
 - Drift found, if any, and the PR link if you opened one.
+- Architectural proposals filed or updated, with issue links.
 - "Considered, not changed" items with one-line reasons.
 
 This report is how a green run with no PR stays distinguishable from a run
@@ -84,7 +107,8 @@ that silently did nothing.
 ## Guardrails
 
 - Small, reviewable PRs. A few high-value changes beat many speculative ones.
-- Never restructure the repo, never change `scripts/rebrand.sh` semantics,
+- Never restructure the repo in a PR — restructuring ideas go to a
+  frontier-proposal issue. Never change `scripts/rebrand.sh` semantics,
   never add secrets or tokens, never edit this prompt or the workflow that
   runs it.
 - Every claim needs a reference. No reference, no change.
