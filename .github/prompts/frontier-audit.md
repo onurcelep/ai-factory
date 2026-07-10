@@ -42,9 +42,8 @@ under "Considered, not changed".
 
 ## 4. Decide
 
-If nothing meets the bar, stop: do not push, do not open a PR. Print a short
-summary of what you checked and why no change was warranted — that summary is
-the run's output.
+If nothing meets the bar, stop: do not push, do not open a PR. Your report
+(see "Report every run" below) is the run's only output in that case.
 
 ## 5. Apply and open the PR
 
@@ -66,6 +65,21 @@ The PR description must contain, for every change:
 
 Plus a "Considered, not changed" section, and a list of the sources checked —
 including the ones where no drift was found.
+
+## Report every run
+
+Whether or not you opened a PR, finish by publishing your closing summary to
+the GitHub Actions run page: resolve the summary file path with
+`echo "$GITHUB_STEP_SUMMARY"`, then write markdown to that file (append with
+`echo`, or use the Write tool on the resolved path). Include:
+
+- Sources checked, with the version/date you saw (including the ones where
+  no drift was found).
+- Drift found, if any, and the PR link if you opened one.
+- "Considered, not changed" items with one-line reasons.
+
+This report is how a green run with no PR stays distinguishable from a run
+that silently did nothing.
 
 ## Guardrails
 
