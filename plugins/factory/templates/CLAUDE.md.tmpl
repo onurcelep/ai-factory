@@ -17,6 +17,10 @@ belongs to this repo).
 - **Model routing: consult the `factory:model-routing` skill** before
   spawning subagents or editing the model pins in
   `.github/workflows/claude*.yml`.
+- **Durable learnings live in `docs/memory/`** — read its `MEMORY.md`
+  index before nontrivial work; record new non-obvious, reusable project
+  facts there in the same PR. Rules: `factory:repo-memory` skill. Never
+  personal data or secrets (the repo may be public).
 - Scale tooling to the task: prefer the lightest mechanism that works
   (inline edit < subagent < worktree < workflow).
 <!-- factory:standard:end -->

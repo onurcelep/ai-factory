@@ -18,7 +18,7 @@ json_valid plugins/factory/.claude-plugin/plugin.json || fail "plugin.json is no
 ok "manifests"
 
 # --- Task 2: shared skills ---
-for s in model-routing release-flow factory-init factory-update; do
+for s in model-routing release-flow repo-memory factory-init factory-update; do
   f="plugins/factory/skills/$s/SKILL.md"
   [ -f "$f" ] || fail "$f missing"
   head -1 "$f" | grep -q '^---$' || fail "$f missing frontmatter"
@@ -29,7 +29,7 @@ ok "shared skills"
 
 # --- Task 3: templates ---
 T=plugins/factory/templates
-for f in claude.yml claude-code-review.yml settings.json CLAUDE.md.tmpl AGENTS.md.tmpl; do
+for f in claude.yml claude-code-review.yml settings.json CLAUDE.md.tmpl AGENTS.md.tmpl MEMORY.md.tmpl; do
   [ -f "$T/$f" ] || fail "$T/$f missing"
 done
 json_valid "$T/settings.json" || fail "settings.json template is not valid JSON"
@@ -41,6 +41,9 @@ grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.
 grep -q 'CLAUDE_CODE_OAUTH_TOKEN' "$T/claude.yml" || fail "claude.yml must use CLAUDE_CODE_OAUTH_TOKEN"
 grep -q 'claude-sonnet-5 --max-turns 10' "$T/claude.yml" || fail "claude.yml must pin sonnet turn-capped"
 grep -q 'model opus' "$T/claude-code-review.yml" || fail "review workflow must pin opus"
+grep -q 'cancel-in-progress: true' "$T/claude-code-review.yml" || fail "review workflow must cancel superseded runs"
+grep -q 'docs/memory' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl standard block must point at docs/memory"
+grep -q 'factory:repo-memory' "$T/MEMORY.md.tmpl" || fail "MEMORY.md.tmpl must reference the repo-memory skill"
 ok "templates"
 
 # --- Task 4: factory-init skill ---

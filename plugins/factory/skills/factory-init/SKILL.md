@@ -29,10 +29,16 @@ If identical, report "already current" and skip.
 | `templates/claude.yml` | `.github/workflows/claude.yml` |
 | `templates/claude-code-review.yml` | `.github/workflows/claude-code-review.yml` |
 | `templates/settings.json` | `.claude/settings.json` |
+| `templates/MEMORY.md.tmpl` | `docs/memory/MEMORY.md` |
 
 For `.claude/settings.json`, if the target exists, MERGE instead of replace:
 add the `onur` marketplace to `extraKnownMarketplaces` and the two entries to
 `enabledPlugins`, preserving everything else in the file.
+
+For `docs/memory/MEMORY.md`, create only if missing. If it already exists,
+leave it completely untouched — after stamping, its content (and every
+fact file beside it) is repo-owned, like `## Project`. Conventions:
+`factory:repo-memory` skill.
 
 ## 3. Stamp AGENTS.md
 

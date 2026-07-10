@@ -23,6 +23,7 @@ flowchart LR
             S2[factory-update]
             S3[model-routing]
             S4[release-flow]
+            S5[repo-memory]
         end
         subgraph T["Template layer — stamped snapshots"]
             T1[claude.yml]
@@ -30,6 +31,7 @@ flowchart LR
             T3[settings.json]
             T4[CLAUDE.md.tmpl]
             T5[AGENTS.md.tmpl]
+            T6[MEMORY.md.tmpl]
         end
     end
 
@@ -41,8 +43,8 @@ flowchart LR
 
 | Layer | Lives in | Reaches repos | Update model |
 |---|---|---|---|
-| Skills (`factory-init`, `factory-update`, `model-routing`, `release-flow`) | `plugins/factory/skills/` | via plugin install | **automatic** — sessions fetch the current version at start |
-| Stamped files (workflows, `.claude/settings.json`, `CLAUDE.md`, `AGENTS.md`) | `plugins/factory/templates/` | copied into each repo | **snapshot** — frozen until you run `/factory-update` there |
+| Skills (`factory-init`, `factory-update`, `model-routing`, `release-flow`, `repo-memory`) | `plugins/factory/skills/` | via plugin install | **automatic** — sessions fetch the current version at start |
+| Stamped files (workflows, `.claude/settings.json`, `CLAUDE.md`, `AGENTS.md`, `docs/memory/MEMORY.md`) | `plugins/factory/templates/` | copied into each repo | **snapshot** — frozen until you run `/factory-update` there |
 
 ## How config reaches each environment
 
@@ -94,6 +96,7 @@ flowchart TD
         W2[".github/workflows/claude-code-review.yml<br/>auto PR review · Opus<br/>self-loads code-review + factory@onur"]
         SJ[".claude/settings.json<br/>marketplace wiring for cloud/local"]
         AG["AGENTS.md<br/>thin cross-tool pointer"]
+        MEM["docs/memory/<br/>MEMORY.md index + fact files<br/>repo-owned after stamping;<br/>shared memory for local, cloud, and Action"]
         subgraph CL["CLAUDE.md"]
             STD["fenced standard block<br/>&lt;!-- factory:standard:begin --&gt; … end<br/>owned by /factory-update"]
             PROJ["## Project<br/>everything repo-specific<br/>never touched by updates"]
@@ -152,6 +155,7 @@ sequenceDiagram
 | `factory-update` | Refreshes only the standard parts: both workflows, plugin wiring in `settings.json`, and the fenced CLAUDE.md block. Refuses to run on un-initialized repos. |
 | `model-routing` | Token-efficiency policy: Haiku for fully-specified implementer tasks, Sonnet for reviewers/fixes/CI responder (`--model claude-sonnet-5 --max-turns 10`), Opus for research/design and the once-per-PR review. Always pin models explicitly. |
 | `release-flow` | Local vs remote discipline: local work gates on `/code-review` before any push that reaches users; the remote `@claude` agent never pushes `main` and always opens a PR. Repo-specific push/deploy rules live in each repo's `## Project`. |
+| `repo-memory` | Repo-committed agent memory: `docs/memory/MEMORY.md` index + one fact per file, readable by every environment (local, cloud, Action) because it lives in the repo. Read the index before nontrivial work; record non-obvious reusable learnings in the same PR; review is the gardening step. |
 
 ## Using it
 
@@ -179,13 +183,15 @@ ai-factory/
 │   │   ├── factory-init/SKILL.md
 │   │   ├── factory-update/SKILL.md
 │   │   ├── model-routing/SKILL.md
-│   │   └── release-flow/SKILL.md
+│   │   ├── release-flow/SKILL.md
+│   │   └── repo-memory/SKILL.md
 │   └── templates/                      # stamped layer
 │       ├── claude.yml
 │       ├── claude-code-review.yml
 │       ├── settings.json
 │       ├── CLAUDE.md.tmpl
-│       └── AGENTS.md.tmpl
+│       ├── AGENTS.md.tmpl
+│       └── MEMORY.md.tmpl
 ├── docs/superpowers/specs/             # design spec
 ├── docs/superpowers/plans/             # implementation plan (historical record)
 └── scripts/validate.sh                 # run after any change here

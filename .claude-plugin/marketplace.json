@@ -5,7 +5,7 @@
     {
       "name": "factory",
       "source": "./plugins/factory",
-      "description": "Personal standard AI-dev setup: init/update stamps plus shared skills (model routing, release flow)."
+      "description": "Personal standard AI-dev setup: init/update stamps plus shared skills (model routing, release flow, repo memory)."
     }
   ]
 }

@@ -25,7 +25,13 @@ For `.claude/settings.json`, merge (preserve any repo-added keys); only
 ensure the `onur` marketplace and the `factory@onur` +
 `superpowers@claude-plugins-official` plugin entries are present and current.
 
-## 3. Refresh the CLAUDE.md standard block
+## 3. Ensure the memory index exists
+
+If `docs/memory/MEMORY.md` is missing, create it from
+`templates/MEMORY.md.tmpl`. If it exists, leave it completely untouched —
+its content and the fact files beside it are repo-owned, like `## Project`.
+
+## 4. Refresh the CLAUDE.md standard block
 
 Extract the text between (and including) the two markers from
 `templates/CLAUDE.md.tmpl` (the {{PROJECT_NAME}} placeholder is not inside
@@ -35,6 +41,6 @@ the diff before writing.
 NEVER modify anything outside the markers: the `## Project` section and
 everything else in the file belong to the repo.
 
-## 4. Report
+## 5. Report
 
 List changed/current files. If nothing changed, say so explicitly.
