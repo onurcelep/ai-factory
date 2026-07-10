@@ -224,6 +224,26 @@ sequenceDiagram
 | `release-flow` | Local vs remote discipline: local work gates on `/code-review` before any push that reaches users; the remote `@claude` agent never pushes `main` and always opens a PR. Repo-specific push/deploy rules live in each repo's `## Project`. |
 | `repo-memory` | Repo-committed agent memory: `docs/memory/MEMORY.md` index + one fact per file, readable by every environment (local, cloud, Action) because it lives in the repo. Read the index before nontrivial work; record non-obvious reusable learnings in the same PR; review is the gardening step. |
 
+## Prerequisites
+
+What must be in place before running `/factory-init` in a target repo.
+Forks need the same list, plus one `rebrand.sh` run first.
+
+| Requirement | Why | Verify |
+|---|---|---|
+| [Claude Code](https://claude.com/claude-code) CLI, logged in | runs the skills; installs the plugins at session start | `claude --version` |
+| A Claude subscription able to mint an OAuth token | the two `@claude` workflows authenticate with the `CLAUDE_CODE_OAUTH_TOKEN` secret | `claude setup-token` |
+| `git` | everything propagates through git | `git --version` |
+| A GitHub-hosted target repo | the workflows are GitHub Actions; the marketplace is fetched from GitHub | `git remote -v` |
+| `gh` CLI, authenticated | `/factory-init`'s preflight and `gh secret set CLAUDE_CODE_OAUTH_TOKEN` | `gh auth status` |
+| Claude GitHub App installed on the target repo or org | lets the Actions react to `@claude` mentions and PRs | https://github.com/apps/claude |
+| `bash` + `python3` | only for hacking on this repo itself (`validate.sh`, `rebrand.sh`) | `python3 --version` |
+
+`/factory-init`'s preflight aborts before writing anything if the target
+is not a git repo; the App install and the secret are manual steps it
+prints as a checklist at the end, and the `@claude` workflows stay inert
+until both exist.
+
 ## Using it
 
 ```bash
@@ -253,8 +273,9 @@ cd ai-factory
 The script rewrites the manifests, templates, and README, then re-runs the
 validation suite (which checks cross-file consistency, not owner literals,
 so it passes for any fork). Review the diff, optionally put your own name
-in the two manifests' owner/author fields, commit, push — then follow
-["Using it"](#using-it) with your slug. Keep the fork public: remote
+in the two manifests' owner/author fields, commit, push — then check
+[Prerequisites](#prerequisites) and follow ["Using it"](#using-it) with
+your slug. Keep the fork public: remote
 marketplace fetches need no token that way, and nothing here should ever
 contain a secret. From there the skills and templates are yours — edit the
 model pins, release rules, and templates to taste.
