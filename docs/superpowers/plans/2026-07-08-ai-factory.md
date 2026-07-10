@@ -2,6 +2,10 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
+> **Publication note:** kept as a historical record. Machine-specific home
+> paths are shortened to `~/...`, and the first consumer repo (private)
+> appears as `repo-a`.
+
 **Goal:** Build the `onurcelep/ai-factory` public repo — a personal Claude Code plugin marketplace plus repo-stamping templates — and retrofit repo-a and etude onto it.
 
 **Architecture:** One repo is both a plugin marketplace (marketplace `onur`, plugin `factory`: auto-updating skills) and a template source (workflows, settings, marker-fenced CLAUDE.md stamped per repo by the `factory-init` skill, refreshed by `factory-update`). Per-repo `.claude/settings.json` declares the marketplace so remote @claude Actions and cloud sessions install the same plugins as local sessions.
@@ -710,8 +714,8 @@ Expected: `factory-init` and `factory-update` are listed. If the marketplace fai
 - [ ] **Step 4: Smoke-test the stamp on a scratch repo**
 
 ```bash
-mkdir -p /private/tmp/claude-501/<workspace>/e34165b4-0c99-4a75-b37b-308f9e6d2c18/scratchpad/factory-smoke
-cd /private/tmp/claude-501/<workspace>/e34165b4-0c99-4a75-b37b-308f9e6d2c18/scratchpad/factory-smoke
+mkdir -p "$SCRATCHPAD"/factory-smoke   # any throwaway dir outside real repos
+cd "$SCRATCHPAD"/factory-smoke
 git init -b main
 ```
 

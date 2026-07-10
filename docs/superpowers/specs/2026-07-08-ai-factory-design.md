@@ -54,8 +54,8 @@ hand-copied, already-drifting variants. New projects restart from zero.
 
 ## Architecture
 
-One **public** GitHub repo, `ai-factory` (local checkout
-`~/code/ai-factory`), acting as both a personal **plugin marketplace**
+One **public** GitHub repo, `ai-factory`, acting as both a personal
+**plugin marketplace**
 (auto-updating layer) and a **template source** (stamped layer). Public
 visibility avoids per-repo PAT plumbing for remote marketplace fetches; the
 repo contains only config and skills, never secrets.
@@ -185,9 +185,8 @@ Run inside any repo:
 
 ## Out of scope
 
-- Moving personal user-level agents/skills 
-  into the plugin — they are machine-local by nature; revisit only if a
-  repo needs them remotely.
+- Moving personal user-level agents/skills into the plugin — they are
+  machine-local by nature; revisit only if a repo needs them remotely.
 - Templating browser-verify CI, devcontainers, and MCP configs — add when a
   second repo needs each.
 - Any spec-kit style lifecycle tooling — superpowers covers process.
