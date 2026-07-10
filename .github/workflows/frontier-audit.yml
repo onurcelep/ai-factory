@@ -1,0 +1,44 @@
+name: Frontier Audit
+
+on:
+  schedule:
+    # Weekly, Monday 06:17 UTC. Off-minute on purpose: :00/:30 cron marks
+    # are fleet-wide stampedes on shared infrastructure.
+    - cron: '17 6 * * 1'
+  workflow_dispatch: # manual off-cycle audits and testing
+
+# Never two audits at once; a manual run supersedes a stuck scheduled one.
+concurrency:
+  group: frontier-audit
+  cancel-in-progress: true
+
+jobs:
+  audit:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write # push the audit branch
+      pull-requests: write # open the audit PR
+      issues: write
+      id-token: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          # Full history: the audit reasons about when practices were adopted.
+          fetch-depth: 0
+
+      - name: Run frontier audit
+        uses: anthropics/claude-code-action@v1
+        with:
+          claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          # Model policy: see the factory:model-routing skill. Fable for the
+          # weekly audit: it is research-heavy, runs once a week, and what it
+          # ships propagates into every consuming repo — depth matters most.
+          # Bash is scoped to git, gh, and the repo's own validator; the rest
+          # of the audit is read/research/edit work.
+          claude_args: |
+            --model claude-fable-5
+            --max-turns 60
+            --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh)
+          prompt: |
+            Read .github/prompts/frontier-audit.md and follow it exactly.
