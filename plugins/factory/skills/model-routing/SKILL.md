@@ -26,3 +26,12 @@ findings; never escalate by default.
 Workflow pins live in `.github/workflows/claude.yml` (Sonnet, turn-capped)
 and `.github/workflows/claude-code-review.yml` (Opus). Keep pins and this
 policy in sync when either changes.
+
+## Single source of truth for pinned values
+
+The workflow files are the ONLY place a pinned literal (model name, turn
+cap, tool allowlist) may appear. Everywhere else (README, CLAUDE.md,
+docs/) point at the pin location instead of restating the value: restated
+copies drift silently the moment a pin changes, because nobody updates
+prose when they bump a cap. The same rule applies to any config literal a
+doc is tempted to quote — link the file that owns it.
