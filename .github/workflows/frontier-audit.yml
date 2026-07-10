@@ -31,14 +31,19 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Model policy: see the factory:model-routing skill. Fable for the
-          # weekly audit: it is research-heavy, runs once a week, and what it
+          # Model policy: see the factory:model-routing skill. Fable as the
+          # single judge: it is research-heavy, runs once a week, and what it
           # ships propagates into every consuming repo — depth matters most.
-          # Bash is scoped to git, gh, and the repo's own validator; the rest
-          # of the audit is read/research/edit work.
+          # The mechanical source sweep fans out to Sonnet subagents (Task),
+          # per the prompt. Bash is scoped to git, gh, the repo's validator,
+          # and harmless utilities; the rest is read/research/edit work.
+          # max-turns is a circuit breaker, not a budget — unused turns cost
+          # nothing. 80 ≈ 2x a realistic heavy run (~40 turns with the Sonnet
+          # fan-out and the denial fixes); the old 60 cap killed a legitimate
+          # drift-finding run at turn 61 and lost its report.
           claude_args: |
             --model claude-fable-5
-            --max-turns 60
-            --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh),Bash(echo:*)
+            --max-turns 80
+            --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Task,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh),Bash(echo:*),Bash(date:*),Bash(ls:*),Bash(cat:*)
           prompt: |
             Read .github/prompts/frontier-audit.md and follow it exactly.
