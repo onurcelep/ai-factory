@@ -21,7 +21,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           fetch-depth: 1
 
@@ -43,4 +43,7 @@ jobs:
           plugins: |
             code-review@claude-code-plugins
             factory@onur
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }}'
+          # --comment is required for the findings to reach the PR: since
+          # anthropics/claude-code@6dcc7d8b (2026-02-11) the command posts
+          # nothing without it, leaving the review only in the runner log.
+          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
