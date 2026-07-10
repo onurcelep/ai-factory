@@ -22,7 +22,7 @@ aborts; everything else continues with a flag.
 | `gh` CLI installed and authenticated | `gh auth status` | flag: install the gh CLI, then `gh auth login`; the secret and App checks below move to the checklist |
 | Repo hosted on GitHub | `gh repo view --json nameWithOwner -q .nameWithOwner` | flag: the stamped workflows only run once the repo is pushed to GitHub; App/secret steps stay on the checklist |
 | Auth secret set | `gh secret list` contains `CLAUDE_CODE_OAUTH_TOKEN` | flag: generate with `claude setup-token`, then `gh secret set CLAUDE_CODE_OAUTH_TOKEN` |
-| Claude GitHub App installed | best effort: `gh api /user/installations` lists an entry with `"app_slug": "claude"` whose repository list covers this repo; if the API cannot answer, report "could not verify" | flag: install https://github.com/apps/claude on the repo or org |
+| Claude GitHub App installed | best effort: `gh api /user/installations` lists an entry with `"app_slug": "claude"` covering this repo. gh's standard OAuth token gets HTTP 403 from this endpoint — in that case report "could not verify; check https://github.com/settings/installations yourself" | flag: install https://github.com/apps/claude on the repo or org |
 
 A repo that is not on GitHub yet still gets stamped — the flagged items
 simply stay on the manual checklist at the end.
