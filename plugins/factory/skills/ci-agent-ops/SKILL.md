@@ -28,6 +28,11 @@ by artifacts and by the result JSON in the run log:
 The real error is hidden by default. Do these in order; do not ship a fix
 before one of them has named the cause:
 
+0. **Retry once first.** Transient API errors produce the exact same
+   instant-`is_error`/$0 signature as a dead token (observed live: two
+   repos' runs blipped simultaneously and both succeeded on retry, via a
+   "@claude please retry" comment). Only a failure that *reproduces* on
+   retry warrants the investigation below.
 1. **Surface the error:** add `show_full_output: true` to the workflow and
    merge it (the action refuses branch-modified workflows even via
    workflow_dispatch, so this must land on the default branch). Read the
