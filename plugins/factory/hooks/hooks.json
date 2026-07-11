@@ -1,0 +1,16 @@
+{
+  "description": "factory hooks — PreToolUse guard making 'nobody pushes main directly' mechanical in local sessions (rulesets cover GitHub-side; this covers the local git push, including private repos without rulesets). Scoped to factory-stamped repos only; override with FACTORY_ALLOW_MAIN_PUSH=1.",
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash \"${CLAUDE_PLUGIN_ROOT}/hooks/protect-main.sh\""
+          }
+        ]
+      }
+    ]
+  }
+}

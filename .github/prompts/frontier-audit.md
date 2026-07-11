@@ -104,6 +104,28 @@ proposal containing: the new capability (with dated references), what part
 of ai-factory it could simplify or replace, the migration sketch, and what
 would be lost. One proposal per issue; no omnibus issues.
 
+## Init canary (every run, before the report)
+
+The golden-file suite pins the mechanical stamping transforms, but "an
+agent following the factory-init prose produces a correct repo" is only
+otherwise tested when a real repo onboards. You are that test. Once per
+run, cheaply:
+
+1. `git init` a scratch repo in the runner temp dir (`$RUNNER_TEMP` or
+   `/tmp`). Give it a small pre-existing CLAUDE.md (a title, a paragraph,
+   one `##` section) so the merge path is exercised.
+2. Follow the `factory:factory-init` skill's steps 2–4 against it using
+   this checkout's `plugins/factory/templates/` (Read + Write tools; skip
+   preflight, GitHub steps, and the ruleset step — this is a filesystem
+   canary, not a live onboarding).
+3. Assert: stamped workflow files byte-match their templates; CLAUDE.md
+   has both markers, the current version stamp, and the original content
+   intact (demoted one heading level) under `## Project`; re-running the
+   CLAUDE.md step reports already-initialized.
+4. Record pass/fail + any prose ambiguity you hit in the run report. A
+   canary failure is itself drift — file it like any other finding. Never
+   commit or push anything from the canary.
+
 ## Report every run
 
 Whether or not you opened a PR, finish by publishing your closing summary to

@@ -150,4 +150,36 @@ bash -n scripts/cost-report.sh || fail "scripts/cost-report.sh has a syntax erro
 grep -q 'total_cost_usd' scripts/cost-report.sh || fail "cost-report.sh must extract total_cost_usd"
 ok "security model doc + cost report"
 
+# --- Plugin agents: routed agent definitions carry the model-routing pins ---
+for a in factory-implementer factory-reviewer factory-researcher; do
+  f="plugins/factory/agents/$a.md"
+  [ -f "$f" ] || fail "$f missing"
+  head -1 "$f" | grep -q '^---$' || fail "$f missing frontmatter"
+  grep -q '^name: ' "$f" || fail "$f missing name field"
+  grep -q '^description: ' "$f" || fail "$f missing description field"
+  grep -q '^model: ' "$f" || fail "$f missing model pin (the whole point)"
+done
+grep -q '^model: haiku' plugins/factory/agents/factory-implementer.md || fail "implementer must pin haiku"
+grep -q '^model: sonnet' plugins/factory/agents/factory-reviewer.md || fail "reviewer must pin sonnet"
+grep -q '^model: opus' plugins/factory/agents/factory-researcher.md || fail "researcher must pin opus"
+grep -q 'factory-implementer' plugins/factory/skills/model-routing/SKILL.md || fail "model-routing skill must reference the shipped agents"
+ok "plugin agents (routing pins)"
+
+# --- Plugin hooks: protect-main guard ---
+json_valid plugins/factory/hooks/hooks.json || fail "hooks.json is not valid JSON"
+grep -q 'protect-main.sh' plugins/factory/hooks/hooks.json || fail "hooks.json must wire protect-main.sh"
+[ -x plugins/factory/hooks/protect-main.sh ] || fail "protect-main.sh missing or not executable"
+bash -n plugins/factory/hooks/protect-main.sh || fail "protect-main.sh has bash syntax errors"
+grep -q 'FACTORY_ALLOW_MAIN_PUSH' plugins/factory/hooks/protect-main.sh || fail "protect-main.sh must carry the escape hatch"
+grep -q 'factory:standard:begin' plugins/factory/hooks/protect-main.sh || fail "protect-main.sh must scope itself to stamped repos"
+ok "plugin hooks (protect-main)"
+
+# --- Round-2 wiring: sticky review comment, init canary, decisions rows ---
+grep -q 'use_sticky_comment: true' plugins/factory/templates/claude-code-review.yml || fail "review template must use a sticky comment"
+grep -q 'Init canary' .github/prompts/frontier-audit.md || fail "frontier-audit prompt must carry the init canary"
+grep -q 'claude-smoke-test' README.md || fail "README decisions must cover the smoke test"
+grep -q 'factory_stamp.py' README.md || fail "README decisions must cover the golden tests"
+grep -q 'version-guard' README.md || fail "README decisions must cover the version guard"
+ok "round-2 wiring (sticky review, canary, decisions rows)"
+
 echo "ALL CHECKS PASSED"

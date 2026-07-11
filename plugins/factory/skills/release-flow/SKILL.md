@@ -7,7 +7,10 @@ description: Standard branch-and-PR release discipline (trunk-based, PR-per-chan
 
 One flow for every change, by anyone (human or @claude): work on a
 short-lived branch, open a pull request, get it reviewed, then a human
-merges to `main`. Nobody pushes to `main` directly.
+merges to `main`. Nobody pushes to `main` directly — and in local sessions
+of stamped repos this is mechanical, not advisory: the plugin's
+`protect-main` hook blocks the push (override for legitimate cases, e.g. a
+brand-new repo's first push, with `FACTORY_ALLOW_MAIN_PUSH=1`).
 
 ## The flow
 
