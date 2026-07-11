@@ -12,6 +12,9 @@ default branch to take effect) to see the SDK stream.
 
 **Diagnosis order for the instant-`is_error`/$0 signature:**
 
+- **Retry once first** (comment "@claude please retry"): transient API
+  errors produce the identical signature and clear on retry. Only a
+  reproducing failure warrants the steps below.
 - **OAuth token first.** Rotate with `claude setup-token` and
   `gh secret set CLAUDE_CODE_OAUTH_TOKEN -R <repo>`. You cannot verify a
   token locally via `CLAUDE_CODE_OAUTH_TOKEN=... claude -p ...` — the CLI
