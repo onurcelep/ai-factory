@@ -128,6 +128,36 @@ Repos stamped before v0.5.0 have markers but no version line — they are
 reported as "stamped, version unknown"; one `/factory-update` adds the
 stamp.
 
+## Fleet cost observability
+
+The model-routing policy manages spend per task, but nothing aggregated it
+across the fleet. `scripts/cost-report.sh` answers "what did the agents
+cost this month?" using `gh` + `python3` only — no external service.
+
+```bash
+scripts/cost-report.sh                 # current month, authenticated gh owner
+scripts/cost-report.sh --month 2026-06 # a specific month (UTC)
+scripts/cost-report.sh --owner other-org --limit 200
+```
+
+It enumerates the owner's factory-stamped repos (the same `CLAUDE.md`
+stamp detection the propagation workflow uses), lists that month's Claude
+workflow runs, and pulls each run's `total_cost_usd` out of its run log
+(the value the claude-code-action prints in its result JSON). Output is a
+per-repo, per-workflow table with a grand total.
+
+**It reports what it could not measure.** GitHub retains Actions logs for a
+limited window (default ~90 days), so a run whose log has expired, is still
+in progress, or never emitted a cost is counted as *unseen* and listed by
+reason — never silently dropped or counted as zero. A month with all logs
+expired prints an empty table with that explanation, which is expected.
+
+**Suggested cadence:** run it on the **1st of each month for the month just
+ended**, before that month's logs start aging out — the only way to capture
+costs you would otherwise lose to the retention window. It is read-only and
+safe to run ad hoc any time. There is no budget *alarm* yet; this is the
+measurement layer an alarm would sit on.
+
 ## CI agent health
 
 Never judge an @claude run by the green check — see the
