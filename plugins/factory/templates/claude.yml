@@ -32,7 +32,11 @@ jobs:
 
       - name: Run Claude Code
         id: claude
-        uses: anthropics/claude-code-action@v1
+        # Temporarily pinned to the 2.1.206 build: the @v1 tag moved to a
+        # build installing Claude Code 2.1.207, which errors instantly in CI
+        # (is_error, $0, green check) — anthropics/claude-code-action#1495.
+        # Restore @v1 once upstream ships a fixed build.
+        uses: anthropics/claude-code-action@536f2c32a39763739000b0e1ac69ca2647d97ce9
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
           # Model policy: see the factory:model-routing skill. Sonnet for
