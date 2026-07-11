@@ -24,7 +24,7 @@ json_valid plugins/factory/.claude-plugin/plugin.json || fail "plugin.json is no
 ok "manifests (marketplace '$MKT')"
 
 # --- Task 2: shared skills ---
-for s in model-routing release-flow repo-memory ci-agent-ops factory-init factory-update; do
+for s in model-routing release-flow repo-memory ci-agent-ops factory-init factory-update factory-status; do
   f="plugins/factory/skills/$s/SKILL.md"
   [ -f "$f" ] || fail "$f missing"
   head -1 "$f" | grep -q '^---$' || fail "$f missing frontmatter"
@@ -51,6 +51,7 @@ grep -q 'claude-sonnet-5 --max-turns 30' "$T/claude.yml" || fail "claude.yml mus
 grep -q 'model opus' "$T/claude-code-review.yml" || fail "review workflow must pin opus"
 grep -q 'cancel-in-progress: true' "$T/claude-code-review.yml" || fail "review workflow must cancel superseded runs"
 grep -q 'docs/memory' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl standard block must point at docs/memory"
+grep -q 'factory:version {{FACTORY_VERSION}}' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl must carry the version stamp placeholder"
 grep -q 'factory:repo-memory' "$T/MEMORY.md.tmpl" || fail "MEMORY.md.tmpl must reference the repo-memory skill"
 grep -q 'ci-claude-silent-failures.md' "$T/MEMORY.md.tmpl" || fail "MEMORY.md.tmpl must index the seeded CI fact file"
 grep -q 'factory:ci-agent-ops' "$T/ci-claude-silent-failures.md" || fail "seeded CI fact must point at the ci-agent-ops skill"
@@ -89,5 +90,16 @@ grep -q "factory@$MKT" plugins/factory/templates/claude-code-review.yml || fail 
 grep -q "github.com/$SLUG" plugins/factory/templates/claude.yml || fail "claude.yml template must reference the $SLUG marketplace URL"
 grep -q "github.com/$SLUG" plugins/factory/templates/claude-code-review.yml || fail "review template must reference the $SLUG marketplace URL"
 ok "workflow plugin self-loading (repo $SLUG)"
+
+# --- Propagation + operations doc ---
+PW=.github/workflows/factory-propagate.yml
+[ -f "$PW" ] || fail "factory-propagate.yml missing"
+grep -q 'FACTORY_PROPAGATE_TOKEN' "$PW" || fail "propagate workflow must gate on FACTORY_PROPAGATE_TOKEN"
+grep -q 'factory:standard:begin' "$PW" || fail "propagate workflow must detect the stamp marker"
+grep -q 'factory:version' "$PW" || fail "propagate workflow must read the version stamp"
+[ -f docs/OPERATIONS.md ] || fail "docs/OPERATIONS.md missing"
+grep -q 'factory-propagate' docs/OPERATIONS.md || fail "OPERATIONS.md must document propagation setup"
+grep -q 'FACTORY_PROPAGATE_TOKEN' docs/OPERATIONS.md || fail "OPERATIONS.md must document the propagation token"
+ok "propagation + operations doc"
 
 echo "ALL CHECKS PASSED"

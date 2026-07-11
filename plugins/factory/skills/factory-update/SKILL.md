@@ -67,10 +67,13 @@ its content and the fact files beside it are repo-owned, like `## Project`.
 ## 4. Refresh the CLAUDE.md standard block
 
 Extract the text between (and including) the two markers from
-`templates/CLAUDE.md.tmpl` (the {{PROJECT_NAME}} placeholder is not inside
-the block, so no placeholder resolution is needed) and replace the text
-between (and including) the markers in the repo's CLAUDE.md with it. Show
-the diff before writing.
+`templates/CLAUDE.md.tmpl`, replace `{{FACTORY_VERSION}}` in it with the
+version resolved in step 0 (the `<!-- factory:version ... -->` line is the
+machine-readable stamp that `factory:factory-status` and the propagation
+workflow read — never drop it), and replace the text between (and
+including) the markers in the repo's CLAUDE.md with the result. Show the
+diff before writing. The {{PROJECT_NAME}} placeholder is not inside the
+block, so no other resolution is needed.
 NEVER modify anything outside the markers: the `## Project` section and
 everything else in the file belong to the repo.
 

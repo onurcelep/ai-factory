@@ -67,10 +67,13 @@ begin: `<!-- factory:standard:begin (managed by /factory-update — do not hand-
 end: `<!-- factory:standard:end -->`
 
 - **No CLAUDE.md:** render `templates/CLAUDE.md.tmpl`. Fill
-  `{{PROJECT_NAME}}`; replace `{{PROJECT_CONTENT}}` with a starter skeleton:
+  `{{PROJECT_NAME}}`, and `{{FACTORY_VERSION}}` with the version from
+  `${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` (this stamp is how
+  `factory:factory-status` and the propagation workflow detect staleness); replace `{{PROJECT_CONTENT}}` with a starter skeleton:
   a `## Commands` heading (build/test/lint found in step 3) and a
   `## Hard rules` heading with a `<!-- add project rules here -->` comment.
-- **CLAUDE.md exists, no markers:** render the template, then move the ENTIRE
+- **CLAUDE.md exists, no markers:** render the template (same placeholder
+  fills as above), then move the ENTIRE
   existing file content under `## Project` (replacing `{{PROJECT_CONTENT}}`).
   Do not delete or rewrite any of it; if the old content duplicates a
   standard rule, point the duplication out to the user and let them decide.

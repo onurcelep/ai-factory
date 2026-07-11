@@ -1,0 +1,69 @@
+name: Factory Propagate
+
+# When the stamped standard changes on main, find every factory-stamped
+# repo of this owner and file an update issue in each stale one, tagging
+# @claude to run /factory-update and push a PR branch. Consumer repos need
+# nothing beyond the standard stamp; a human still merges every PR.
+#
+# Requires the FACTORY_PROPAGATE_TOKEN secret: a fine-grained PAT with
+# Contents: read and Issues: write on this owner's repos. Without it the
+# workflow skips with a notice (safe default for forks that don't want
+# propagation). The default GITHUB_TOKEN cannot be used: it is scoped to
+# this repository only.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'plugins/factory/templates/**'
+      - 'plugins/factory/.claude-plugin/plugin.json'
+  workflow_dispatch: # re-run propagation manually (e.g. after setting the token)
+
+concurrency:
+  group: factory-propagate
+  cancel-in-progress: true
+
+jobs:
+  propagate:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 1
+
+      - name: File update issues in stale consumer repos
+        env:
+          GH_TOKEN: ${{ secrets.FACTORY_PROPAGATE_TOKEN }}
+        run: |
+          set -euo pipefail
+          if [ -z "${GH_TOKEN:-}" ]; then
+            echo "::notice::FACTORY_PROPAGATE_TOKEN not set — skipping propagation. See docs/OPERATIONS.md to enable."
+            exit 0
+          fi
+          VERSION=$(python3 -c "import json; print(json.load(open('plugins/factory/.claude-plugin/plugin.json'))['version'])")
+          OWNER="${GITHUB_REPOSITORY_OWNER}"
+          SELF="${GITHUB_REPOSITORY#*/}"
+          echo "Propagating factory v${VERSION} for owner ${OWNER}"
+          for repo in $(gh repo list "$OWNER" --limit 200 --json name --jq '.[].name'); do
+            [ "$repo" = "$SELF" ] && continue
+            claude_md=$(gh api "repos/$OWNER/$repo/contents/CLAUDE.md" --jq .content 2>/dev/null | base64 -d 2>/dev/null) || continue
+            echo "$claude_md" | grep -q 'factory:standard:begin' || continue
+            stamped=$(echo "$claude_md" | grep -o 'factory:version [0-9.]*' | awk '{print $2}' | head -1)
+            if [ "$stamped" = "$VERSION" ]; then
+              echo "$repo: current ($VERSION)"
+              continue
+            fi
+            title="factory-update to ${VERSION}"
+            existing=$(gh issue list -R "$OWNER/$repo" --state open --search "\"$title\" in:title" --json number --jq length)
+            if [ "${existing:-0}" -gt 0 ]; then
+              echo "$repo: stale (${stamped:-pre-0.5.0}) — update issue already open"
+              continue
+            fi
+            echo "$repo: stale (${stamped:-pre-0.5.0}) — filing update issue"
+            gh issue create -R "$OWNER/$repo" \
+              --title "$title" \
+              --body "@claude the ai-factory standard changed on main (now v${VERSION}; this repo is stamped ${stamped:-pre-0.5.0}). Run /factory-update per the factory:factory-update skill: refresh the stamped workflows, settings wiring, and the CLAUDE.md standard block from the marketplace's main, commit on a claude/ branch, and push. Post the Create PR link when done. Touch nothing outside the stamped files and the standard block."
+          done
