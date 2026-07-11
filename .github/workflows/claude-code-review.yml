@@ -15,9 +15,12 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       # Trust boundary for these scopes: docs/SECURITY-MODEL.md (review row).
+      # issues:write exists ONLY so the assertion step below can post its
+      # self-report comment on the PR when a run fails; it adds no capability
+      # class the job lacks (the app token already posts the review comment).
       contents: read
       pull-requests: read
-      issues: read
+      issues: write
       id-token: write
 
     steps:
@@ -78,14 +81,45 @@ jobs:
         env:
           EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
           CLAUDE_OUTCOME: ${{ steps.claude-review.outcome }}
+          GH_TOKEN: ${{ github.token }}
+          PR_NUMBER: ${{ github.event.pull_request.number }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          # Self-report: a failing check explains itself on the PR (one marked
+          # comment, updated in place) so nobody digs through run logs to learn
+          # what this step already knew. Reporting is fail-open — a comment
+          # error never masks or replaces the red check.
+          report() {
+            local body
+            body=$(printf '%s\n' \
+              '<!-- factory:ci-self-report -->' \
+              '### CI self-report: review check failed' '' "$1" '' \
+              "Run: $RUN_URL — diagnosis order: the factory:ci-agent-ops skill.")
+            local cid
+            cid=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+              --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>/dev/null || true)
+            if [ -n "${cid:-}" ] && [ "$cid" != "null" ]; then
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" >/dev/null 2>&1 || true
+            else
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" >/dev/null 2>&1 || true
+            fi
+          }
           if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
             if [ "$CLAUDE_OUTCOME" = "failure" ]; then
               echo "Review step already failed for an honest reason; no execution log to assert on."
               exit 0
             fi
-            echo "::error::Silent failure: claude-code-action exited green but wrote no execution log. Suspect CLAUDE_CODE_OAUTH_TOKEN — see the factory:ci-agent-ops skill."
+            # Discriminate the two no-log causes: the action's anti-tamper skip
+            # (this PR edits the review workflow file) vs a silent failure.
+            if gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/files" --paginate --jq '.[].filename' 2>/dev/null \
+                | grep -qx '.github/workflows/claude-code-review.yml'; then
+              report "**Expected red — anti-tamper skip.** This PR modifies the review workflow file, so the action refuses to run it (the file must match the default branch). No token problem; the review runs normally on the next PR after this one merges."
+              echo "::error::Anti-tamper skip: this PR edits the review workflow (expected red; see the PR comment)."
+              exit 1
+            fi
+            report "**Silent failure.** The action exited green but wrote no execution log. Retry once (transient API errors share this signature); if it reproduces, suspect CLAUDE_CODE_OAUTH_TOKEN first."
+            echo "::error::Silent failure: claude-code-action exited green but wrote no execution log. See the PR comment."
             exit 1
           fi
           RESULT=$(jq -c 'if type == "array" and length > 0 then .[-1] else {} end | select(.type == "result")' "$EXECUTION_FILE" 2>/dev/null || true)
@@ -96,7 +130,8 @@ jobs:
           COST_IS_ZERO=$(jq -rn --argjson c "${COST:-0}" '$c == 0')
           echo "claude-code-action result: is_error=$IS_ERROR num_turns=$NUM_TURNS total_cost_usd=$COST"
           if [ "$IS_ERROR" = "true" ] && [ "$NUM_TURNS" -le 1 ] && [ "$COST_IS_ZERO" = "true" ]; then
-            echo "::error::Dead-on-arrival signature (is_error / 1 turn / \$0). CLAUDE_CODE_OAUTH_TOKEN is almost certainly bad — regenerate it. See the factory:ci-agent-ops skill."
+            report "**Dead-on-arrival signature** (is_error / 1 turn / USD 0): CLAUDE_CODE_OAUTH_TOKEN is almost certainly bad. Retry once; if it reproduces, rotate with claude setup-token + gh secret set CLAUDE_CODE_OAUTH_TOKEN."
+            echo "::error::Dead-on-arrival signature (is_error / 1 turn / USD 0). See the PR comment."
             exit 1
           fi
           echo "Health assertion passed."

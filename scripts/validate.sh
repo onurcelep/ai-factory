@@ -182,4 +182,14 @@ grep -q 'factory_stamp.py' README.md || fail "README decisions must cover the go
 grep -q 'version-guard' README.md || fail "README decisions must cover the version guard"
 ok "round-2 wiring (sticky review, canary, decisions rows)"
 
+# --- CI self-reporting: failing runs explain themselves ---
+for f in claude.yml claude-code-review.yml claude-smoke-test.yml; do
+  grep -q 'factory:ci-self-report' "$T/$f" || fail "$f must carry the self-report mechanism"
+done
+grep -q 'issues: write' "$T/claude-code-review.yml" || fail "review template needs issues:write for the self-report comment"
+grep -q 'issues: write' "$T/claude-smoke-test.yml" || fail "smoke template needs issues:write for the health issue"
+grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must discriminate the anti-tamper skip"
+grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
+ok "CI self-reporting"
+
 echo "ALL CHECKS PASSED"

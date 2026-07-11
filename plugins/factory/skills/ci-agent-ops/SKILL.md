@@ -31,6 +31,16 @@ by artifacts and by the result JSON in the run log:
   the run behaves normally again after merge. Discriminate by reading
   the run log for "Workflow validation failed".
 
+## Self-reports: read the comment before the logs
+
+Since 0.6.4 a failing health assertion explains itself: the responder and
+review workflows post/update a marked comment (`factory:ci-self-report`)
+on the triggering issue/PR naming the cause (anti-tamper skip vs silent
+failure vs dead-token signature), and a failing smoke test files/updates a
+**"CI health: Claude smoke test failing"** issue. Check those first; dig
+into run logs only when no self-report exists (which is itself a signal —
+the assertion step never ran).
+
 ## Diagnosis order for dead-on-arrival runs
 
 The real error is hidden by default. Do these in order; do not ship a fix
