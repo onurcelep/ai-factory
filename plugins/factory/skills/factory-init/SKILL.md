@@ -62,6 +62,8 @@ report "already current" and skip; otherwise diff-and-confirm.
 
 ## 4. Stamp CLAUDE.md (three cases)
 
+The mechanical transforms below (marker splice, H1-drop + heading demotion, and the settings merge in step 2) are encoded as executable truth in `scripts/lib/factory_stamp.py` in the ai-factory repo (golden-tested by `scripts/test-stamping.sh`) — match its behaviour exactly.
+
 Markers, verbatim:
 begin: `<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->`
 end: `<!-- factory:standard:end -->`

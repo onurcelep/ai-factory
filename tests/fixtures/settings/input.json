@@ -1,0 +1,10 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)"
+    ]
+  },
+  "enabledPlugins": {
+    "some-other-plugin@some-market": true
+  }
+}
