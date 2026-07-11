@@ -37,6 +37,7 @@ If identical, report "already current" and skip.
 |---|---|
 | `templates/claude.yml` | `.github/workflows/claude.yml` |
 | `templates/claude-code-review.yml` | `.github/workflows/claude-code-review.yml` |
+| `templates/claude-smoke-test.yml` | `.github/workflows/claude-smoke-test.yml` |
 | `templates/settings.json` | `.claude/settings.json` |
 | `templates/MEMORY.md.tmpl` | `docs/memory/MEMORY.md` |
 | `templates/ci-claude-silent-failures.md` | `docs/memory/ci-claude-silent-failures.md` |

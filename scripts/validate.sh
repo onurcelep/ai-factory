@@ -35,7 +35,7 @@ ok "shared skills"
 
 # --- Task 3: templates ---
 T=plugins/factory/templates
-for f in claude.yml claude-code-review.yml settings.json CLAUDE.md.tmpl AGENTS.md.tmpl MEMORY.md.tmpl ci-claude-silent-failures.md; do
+for f in claude.yml claude-code-review.yml claude-smoke-test.yml settings.json CLAUDE.md.tmpl AGENTS.md.tmpl MEMORY.md.tmpl ci-claude-silent-failures.md; do
   [ -f "$T/$f" ] || fail "$T/$f missing"
 done
 json_valid "$T/settings.json" || fail "settings.json template is not valid JSON"
@@ -58,6 +58,16 @@ grep -q 'factory:version {{FACTORY_VERSION}}' "$T/CLAUDE.md.tmpl" || fail "CLAUD
 grep -q 'factory:repo-memory' "$T/MEMORY.md.tmpl" || fail "MEMORY.md.tmpl must reference the repo-memory skill"
 grep -q 'ci-claude-silent-failures.md' "$T/MEMORY.md.tmpl" || fail "MEMORY.md.tmpl must index the seeded CI fact file"
 grep -q 'factory:ci-agent-ops' "$T/ci-claude-silent-failures.md" || fail "seeded CI fact must point at the ci-agent-ops skill"
+# Silent-failure detection (issue #17): a scheduled smoke test + post-run
+# assertions on the dead-on-arrival signature. Both the scheduled probe and
+# the assertion steps parse the action's documented `execution_file` output.
+grep -q 'claude-haiku' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must pin the cheapest capable model (haiku)"
+grep -q 'cron:' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must run on a schedule (off-minute cron)"
+grep -q 'cancel-in-progress: true' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must use a concurrency group"
+grep -q 'execution_file' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must assert on the action's execution_file output"
+grep -q 'is_error' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must check the dead-on-arrival is_error signature"
+grep -q 'execution_file' "$T/claude.yml" || fail "claude.yml must assert on the action's execution_file output"
+grep -q 'execution_file' "$T/claude-code-review.yml" || fail "review workflow must assert on the action's execution_file output"
 ok "templates"
 
 # --- Task 4: factory-init skill ---
