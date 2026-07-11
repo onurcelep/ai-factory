@@ -7,11 +7,21 @@ description: Refresh the ai-factory standard parts of an already-initialized rep
 
 Refresh only the standard, stamped parts.
 
-## 0. Resolve the template source — remote main by default
+## 0. Resolve the template source
 
-`${CLAUDE_PLUGIN_ROOT}/templates/` is a cache fetched at session start and
-may be stale (a session opened before a template change keeps the old
-version for its whole lifetime). Never stamp from it by default. Instead:
+**In a GitHub Action session (the @claude responder), use
+`${CLAUDE_PLUGIN_ROOT}/templates/` directly.** The Action installs the
+plugin fresh from the marketplace at every run start, so the cache is
+current by construction — and the sandbox blocks network access anyway.
+Do not attempt `git clone`, `curl`, or WebFetch there; they fail and waste
+turns. Read the version from
+`${CLAUDE_PLUGIN_ROOT}/.claude-plugin/plugin.json` and state it in the
+report and commit message ("factory-update to <version>").
+
+**In a local or cloud session**, `${CLAUDE_PLUGIN_ROOT}/templates/` is a
+cache fetched at session start and may be stale (a session opened before a
+template change keeps the old version for its whole lifetime). Never stamp
+from it by default. Instead:
 
 1. Derive the marketplace repo slug from the target repo's
    `.claude/settings.json` → `extraKnownMarketplaces.<name>.source.repo`.

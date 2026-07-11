@@ -65,5 +65,5 @@ jobs:
             echo "$repo: stale (${stamped:-pre-0.5.0}) — filing update issue"
             gh issue create -R "$OWNER/$repo" \
               --title "$title" \
-              --body "@claude the ai-factory standard changed on main (now v${VERSION}; this repo is stamped ${stamped:-pre-0.5.0}). Run /factory-update per the factory:factory-update skill: refresh the stamped workflows, settings wiring, and the CLAUDE.md standard block from the marketplace's main, commit on a claude/ branch, and push. Post the Create PR link when done. Touch nothing outside the stamped files and the standard block."
+              --body "@claude the ai-factory standard changed on main (now v${VERSION}; this repo is stamped ${stamped:-pre-0.5.0}). Run /factory-update per the factory:factory-update skill. Your session's plugin cache was installed fresh from the marketplace at run start, so stamp directly from \${CLAUDE_PLUGIN_ROOT}/templates/ — do not attempt git clone or network fetches (the sandbox blocks them). Refresh the stamped workflows, settings wiring, and the CLAUDE.md standard block; commit on a claude/ branch and push. Post the Create PR link when done. Touch nothing outside the stamped files and the standard block."
           done
