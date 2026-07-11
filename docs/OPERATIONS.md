@@ -77,6 +77,23 @@ Requirements in consumer repos (all standard): the stamped `claude.yml`
 `CLAUDE_CODE_OAUTH_TOKEN` secret. Consumer repos carry **zero**
 propagation-specific config.
 
+**Known limitation:** GitHub blocks App-token pushes that modify
+`.github/workflows/` files, so a propagated update can deliver
+everything *except* changes to the workflow files themselves — the
+agent applies the rest and reports the workflow diff for a human to
+apply (a one-line `git` push under your own account, which has the
+`workflow` scope). Template changes to workflows are rare; when one
+ships, expect that one manual step per repo.
+
+## When to bump the plugin version
+
+The version is the propagation trigger and comparison key, so it tracks
+**template state only**: bump it when anything under
+`plugins/factory/templates/` changes, and don't bump it for skill- or
+doc-only changes — skills reach every CI agent on their next run without
+a release, and a version bump would file stamp-only update PRs in every
+repo for no delivered change.
+
 ## How staleness is detected
 
 `/factory-init` and `/factory-update` write a machine-readable stamp into

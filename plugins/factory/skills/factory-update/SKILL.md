@@ -59,6 +59,14 @@ This tool will never modify content outside the marker boundaries.
 
 ## 2. Refresh workflows and settings
 
+**Action-session limitation:** GitHub rejects pushes from the @claude
+App token that create or modify files under `.github/workflows/`
+("refusing to allow a GitHub App to ... without workflows permission").
+If the template diff touches only workflow files' comments or content:
+apply everything else, revert the workflow-file changes, and report the
+exact remaining diff for a human (or a local session) to apply. Do not
+burn turns retrying the push.
+
 Templates below refer to the source resolved in step 0.
 
 Same diff-and-confirm copy as factory-init, same targets:

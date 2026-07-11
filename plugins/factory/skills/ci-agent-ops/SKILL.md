@@ -66,6 +66,10 @@ Known plumbing facts (why the loop is shaped this way):
   workflow needs `contents/pull-requests/issues: write` (the App token
   only covers comment posting; with read-only permissions every implement
   task dies at `git push` 403 while comments still work).
+- Even with write permissions, pushes that modify `.github/workflows/`
+  files are rejected ("without workflows permission"). Don't retry:
+  apply everything else, revert the workflow-file part, and report the
+  remaining diff for a human to apply.
 - The action never opens the PR itself: it pushes and posts a prefilled
   "Create PR ➔" link. This is by design — a PR created by the workflow's
   own token would not trigger `pull_request` workflows (GitHub
