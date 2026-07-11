@@ -16,6 +16,12 @@ what, if anything, you do.
 | A **seeded memory** (`templates/*.md` fact files) | `/factory-init`, new repos only | On repos initialized after the change | Same | Nothing — existing repos own their memory files |
 | Repo content (`## Project`, `docs/memory/`, code) | None — repo-owned | — | — | Factory never touches it |
 
+The skills row is the one with no version gate: an edit on `main` reaches
+the whole fleet at each environment's next turnover, with no release step.
+That is deliberate (freshness over ceremony), but it needs a rollback
+story and a stability escape hatch — see
+[Rolling back a bad skill](#rolling-back-a-bad-skill-and-pinning-against-one).
+
 ## Lifecycle
 
 ### Onboard a brand-new repo
@@ -128,3 +134,89 @@ Never judge an @claude run by the green check — see the
 `factory:ci-agent-ops` skill for health signals, the silent-failure
 diagnosis order, and the smoke-test procedure. Seeded per repo as
 `docs/memory/ci-claude-silent-failures.md`.
+
+## Rolling back a bad skill, and pinning against one
+
+Skills auto-propagate from `main` with no version gate (the skills row of
+the four-channel table above). That trades a release step for a rollback
+story. Here is the whole story, and the one opt-in that buys a repo
+stability if it wants it.
+
+### A skill edit on main breaks CI agents — what do you run?
+
+1. **Revert on `main`.** `main` is PR-guarded, so `git revert <sha>`, open
+   a PR, and merge it (or push a one-file PR restoring the last-good skill).
+   There is no tag to move and no release to cut — for this system the
+   marketplace *is* `main`.
+2. That is the entire action. Each environment re-converges on its own
+   schedule (next table); you never touch consumer repos to fix a bad skill.
+
+**Why revert-on-`main` is the only lever for CI agents.** The `@claude`
+GitHub Action installs the plugin with
+`plugin_marketplaces: https://github.com/onurcelep/ai-factory.git` and runs
+`claude plugin marketplace add <url>` against that URL's **default branch**.
+The Action's input validator rejects any URL that does not end in `.git`
+(`claude-code-action`'s `base-action/src/install-plugins.ts`,
+`MARKETPLACE_URL_REGEX = /^https:\/\/…\.git$/`), so no `#ref` / `?ref=` /
+sha suffix is accepted and a CI run cannot be pointed at a pinned ref. The
+marketplace a CI agent sees is always `main`. Ref-pinning the CI channel is
+**not supported upstream**; reverting `main` is the mechanism.
+
+### Convergence time per environment
+
+| Environment | How it fetches skills | Time to pick up the revert | In-flight work |
+|---|---|---|---|
+| `@claude` GitHub Action (CI agents) | fresh `marketplace add` + `plugin install` at the start of **every** run — no cache, no pin | **Next `@claude` run** after the revert merges | A run already executing keeps the bad skill until it ends |
+| Claude Code **cloud** session | plugin fetched at session start | **Next new session** | An open session keeps the bad skill for its whole lifetime |
+| Claude Code **local** session | cached plugin, refreshed on `claude plugin update` or the periodic cache refresh | After `claude plugin update factory@<marketplace>` (or the next periodic refresh), **per machine** | An open session keeps the bad skill for its whole lifetime |
+
+The fleet is healthy once the revert PR is merged **and** every environment
+has turned over per the middle column. CI has no cache, so it is the
+fastest to heal (next run); a machine with a long-lived local session is
+the slowest. The floor is "merge the revert" — there is no faster lever for
+CI, and nothing slower you must wait on beyond a machine's `plugin update`.
+
+### Pin a consumer repo to a known-good skills version (opt-in)
+
+A repo that values stability over freshness can pin the marketplace source
+to a **tag or commit SHA** in its committed `.claude/settings.json`. This
+is a documented `extraKnownMarketplaces` capability
+(`https://docs.claude.com/en/docs/claude-code/plugin-marketplaces`):
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "onur": {
+      "source": {
+        "source": "github",
+        "repo": "onurcelep/ai-factory",
+        "ref": "v0.5.0",
+        "sha": "<full-commit-sha>"
+      }
+    }
+  }
+}
+```
+
+When both are set the `sha` is the effective pin: Claude Code checks out
+that commit directly, and the install still succeeds even if the branch or
+tag named by `ref` is later deleted upstream, as long as the commit stays
+reachable. Rolling forward is a one-line edit to a newer `ref`/`sha`;
+rolling back is editing it to an older one.
+
+**This escape hatch covers local and cloud sessions only.** The `@claude`
+Action cannot honor it — its `plugin_marketplaces` input takes a bare
+`.git` URL (above), so a pinned consumer still gets `main`-tracking skills
+in CI. There is therefore no per-repo way to freeze CI today; keeping
+ai-factory's `main` known-good (the revert runbook above) is the
+fleet-wide control, and per-repo pinning is a local/cloud comfort layer on
+top of it.
+
+**Why there is no `stable`-tag release channel.** The tempting design —
+have workflows fetch the marketplace at a moving `stable` tag and promote
+`main → stable` deliberately — cannot work for CI, because the Action's
+`plugin_marketplaces` input rejects a pinned ref (above). A `stable` tag
+would gate only the local/cloud half of the fleet while CI kept tracking
+`main`, so it would add a promotion ritual without actually protecting the
+channel that matters most. Rejected in favor of the revert runbook, which
+is one lever that covers the whole fleet.
