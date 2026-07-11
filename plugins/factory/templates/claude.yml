@@ -19,6 +19,7 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
+      # Trust boundary for these scopes: docs/SECURITY-MODEL.md (responder row).
       # Write per the action's documented example: branch pushes and PR
       # creation use this workflow token (the app token only covers
       # comments), so read-only here silently breaks "@claude opens a PR".

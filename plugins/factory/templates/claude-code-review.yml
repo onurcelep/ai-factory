@@ -14,6 +14,7 @@ jobs:
   claude-review:
     runs-on: ubuntu-latest
     permissions:
+      # Trust boundary for these scopes: docs/SECURITY-MODEL.md (review row).
       contents: read
       pull-requests: read
       issues: read

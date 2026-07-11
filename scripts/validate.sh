@@ -142,4 +142,12 @@ grep -q 'Convergence time per environment' docs/OPERATIONS.md || fail "OPERATION
 grep -q 'extraKnownMarketplaces' docs/OPERATIONS.md || fail "OPERATIONS.md must document the opt-in consumer pin (extraKnownMarketplaces ref/sha)"
 ok "skills channel pin/rollback story"
 
+# --- Security model doc + cost report ---
+[ -f docs/SECURITY-MODEL.md ] || fail "docs/SECURITY-MODEL.md missing"
+grep -q 'SECURITY-MODEL.md' README.md || fail "README must link docs/SECURITY-MODEL.md from the decisions table"
+[ -f scripts/cost-report.sh ] || fail "scripts/cost-report.sh missing"
+bash -n scripts/cost-report.sh || fail "scripts/cost-report.sh has a syntax error"
+grep -q 'total_cost_usd' scripts/cost-report.sh || fail "cost-report.sh must extract total_cost_usd"
+ok "security model doc + cost report"
+
 echo "ALL CHECKS PASSED"
