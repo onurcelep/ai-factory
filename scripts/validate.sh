@@ -123,4 +123,13 @@ grep -q 'check-version-bump.sh' .github/workflows/version-guard.yml || fail "ver
 scripts/check-version-bump.sh || fail "template change without a version bump (see message above)"
 ok "version-bump guard"
 
+# --- Skills channel pin/rollback story (issue #16) ---
+# The skills channel auto-propagates from main with no version gate, so the
+# rollback runbook + per-environment convergence table + the opt-in consumer
+# pin are the whole safety story — they must not silently disappear.
+grep -q 'Rolling back a bad skill' docs/OPERATIONS.md || fail "OPERATIONS.md must carry the skill-rollback runbook"
+grep -q 'Convergence time per environment' docs/OPERATIONS.md || fail "OPERATIONS.md must document per-environment convergence for a skill rollback"
+grep -q 'extraKnownMarketplaces' docs/OPERATIONS.md || fail "OPERATIONS.md must document the opt-in consumer pin (extraKnownMarketplaces ref/sha)"
+ok "skills channel pin/rollback story"
+
 echo "ALL CHECKS PASSED"

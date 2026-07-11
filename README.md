@@ -154,6 +154,7 @@ deliberate decision; the linked skill or template is its source of truth.
 | The process layer is a swappable default, not a hard dependency: the shipped template enables `superpowers` for local and cloud sessions only (intentionally not loaded into Action runs — context cost, no benefit for a turn-capped responder), but the validator requires only `factory@<marketplace>`. Drop or replace it by editing one line in the template (see [Use it as a base](#use-it-as-a-base)). | `templates/settings.json` |
 | One secret per consumer repo (`CLAUDE_CODE_OAUTH_TOKEN`); this repo stays public and never carries secrets. | `/factory-init` checklist |
 | `AGENTS.md` is a thin cross-tool pointer to CLAUDE.md, nothing more. | `templates/AGENTS.md.tmpl` |
+| Skills auto-propagate from `main` with no version gate; the pin/rollback story is a fleet-wide **revert-on-`main` runbook** plus a per-environment convergence table, and an **opt-in per-repo `extraKnownMarketplaces` `ref`/`sha` pin** that stabilizes local + cloud sessions only. A moving `stable`-tag channel was rejected: `claude-code-action`'s `plugin_marketplaces` input accepts only a bare `.git` URL, so CI cannot honor a pinned ref and a tag would protect just half the fleet. | `docs/OPERATIONS.md` (rollback + convergence) |
 
 ## Use it as a base
 
