@@ -7,6 +7,11 @@
 # run log (the value the claude-code-action prints in its result JSON).
 # Prints a per-repo, per-workflow table plus a grand total.
 #
+# The output is operator-private data: real spend figures reveal an
+# operator's usage and business activity. Keep reports out of public
+# artifacts (PR bodies, issues, committed files) — this applies to any
+# fork's operator, not just this repo's author.
+#
 # Dependencies: gh (authenticated) + python3 only. No external services.
 #
 # Degrades gracefully: GitHub retains Actions logs for a limited window
