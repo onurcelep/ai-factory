@@ -11,7 +11,7 @@ what, if anything, you do.
 
 | What changed in ai-factory | Channel | Reaches CI agents | Reaches local sessions | You do |
 |---|---|---|---|---|
-| A **skill** (`plugins/factory/skills/`) | Plugin marketplace | Automatically, next @claude run (workflows fetch the plugin fresh every run) | After `claude plugin update factory@<marketplace>` (or the periodic cache refresh) | Nothing per repo; update the local plugin per machine |
+| **Plugin content** — skills, agents, hooks (`plugins/factory/{skills,agents,hooks}/`) | Plugin marketplace | Automatically, next @claude run (workflows fetch the plugin fresh every run) | After `claude plugin update factory@<marketplace>` (or the periodic cache refresh) | Nothing per repo; update the local plugin per machine |
 | A **template** (`plugins/factory/templates/`) | `/factory-update`, per repo | After the update PR merges | Same | Merge the auto-filed update PR (or run `/factory-update` manually) |
 | A **seeded memory** (`templates/*.md` fact files) | `/factory-init`, new repos only | On repos initialized after the change | Same | Nothing — existing repos own their memory files |
 | Repo content (`## Project`, `docs/memory/`, code) | None — repo-owned | — | — | Factory never touches it |

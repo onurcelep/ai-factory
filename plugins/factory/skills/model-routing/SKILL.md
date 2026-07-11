@@ -24,6 +24,15 @@ explicitly: an omitted model silently inherits an expensive default.
 Escalate one level when a task is BLOCKED or produces repeated review
 findings; never escalate by default.
 
+## Shipped agents carry these pins
+
+Prefer spawning the plugin's shared agents over restating the routing per
+task — they encode this policy structurally and update fleet-wide with the
+plugin: **factory-implementer** (Haiku, fully-specified tasks, returns
+BLOCKED instead of guessing), **factory-reviewer** (Sonnet, scoped
+review/fix), **factory-researcher** (Opus, decision-ready research). Live
+in `plugins/factory/agents/`.
+
 Workflow pins live in `.github/workflows/claude.yml` (Sonnet, turn-capped)
 and `.github/workflows/claude-code-review.yml` (Opus). Keep pins and this
 policy in sync when either changes.
