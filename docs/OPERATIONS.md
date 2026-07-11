@@ -232,7 +232,10 @@ When both are set the `sha` is the effective pin: Claude Code checks out
 that commit directly, and the install still succeeds even if the branch or
 tag named by `ref` is later deleted upstream, as long as the commit stays
 reachable. Rolling forward is a one-line edit to a newer `ref`/`sha`;
-rolling back is editing it to an older one.
+rolling back is editing it to an older one. The pin **survives
+`/factory-update`**: the settings merge treats `ref`/`sha` as repo-owned
+and never removes them (`scripts/lib/factory_stamp.py merge-settings`,
+golden-tested).
 
 **This escape hatch covers local and cloud sessions only.** The `@claude`
 Action cannot honor it — its `plugin_marketplaces` input takes a bare
@@ -250,6 +253,15 @@ would gate only the local/cloud half of the fleet while CI kept tracking
 `main`, so it would add a promotion ritual without actually protecting the
 channel that matters most. Rejected in favor of the revert runbook, which
 is one lever that covers the whole fleet.
+
+**Also considered, not chosen: a stable-mirror promotion repo.** A second
+repo whose default branch is only ever fast-forwarded from this one by a
+deliberate promotion act would give CI a real release gate (the Action
+reads the default branch of whatever URL it is given). Rejected for now:
+it adds a second repo, a promotion ritual, and a fleet-wide workflow-URL
+change — permanent upkeep to hedge a risk the revert runbook already
+covers in one merge. Revisit if the fleet grows beyond one operator or
+upstream adds ref support to the Action's `plugin_marketplaces` input.
 
 Two stamped guards automate what the skill describes, so a bad
 `CLAUDE_CODE_OAUTH_TOKEN` no longer waits for a human to notice a
