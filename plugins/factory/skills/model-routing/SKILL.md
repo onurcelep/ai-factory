@@ -12,7 +12,8 @@ explicitly: an omitted model silently inherits an expensive default.
   contains the complete code; the job is transcription plus running tests).
 - **Sonnet**: fix subagents, task reviewers, GitHub routines, and the
   interactive @claude Actions responder (`--model claude-sonnet-5
-  --max-turns 10`). Judgment work needs at least mid-tier: turn count beats
+  --max-turns 40`; the propagated factory-update task alone needs ~46
+  recorded turns, so lower caps kill legitimate runs). Judgment work needs at least mid-tier: turn count beats
   token price. An under-modeled agent that takes 3x the turns costs more
   than a capable one.
 - **Opus**: research sweeps, architecture/design work, and the auto PR-review

@@ -47,7 +47,7 @@ grep -q 'superpowers@claude-plugins-official' "$T/settings.json" || fail "settin
 grep -qF '<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing begin marker"
 grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing end marker"
 grep -q 'CLAUDE_CODE_OAUTH_TOKEN' "$T/claude.yml" || fail "claude.yml must use CLAUDE_CODE_OAUTH_TOKEN"
-grep -q 'claude-sonnet-5 --max-turns 30' "$T/claude.yml" || fail "claude.yml must pin sonnet turn-capped"
+grep -q 'claude-sonnet-5 --max-turns 40' "$T/claude.yml" || fail "claude.yml must pin sonnet turn-capped"
 grep -q 'model opus' "$T/claude-code-review.yml" || fail "review workflow must pin opus"
 grep -q 'cancel-in-progress: true' "$T/claude-code-review.yml" || fail "review workflow must cancel superseded runs"
 grep -q 'docs/memory' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl standard block must point at docs/memory"
