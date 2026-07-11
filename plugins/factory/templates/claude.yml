@@ -19,9 +19,13 @@ jobs:
       (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
     runs-on: ubuntu-latest
     permissions:
-      contents: read
-      pull-requests: read
-      issues: read
+      # Write per the action's documented example: branch pushes and PR
+      # creation use this workflow token (the app token only covers
+      # comments), so read-only here silently breaks "@claude opens a PR".
+      # main stays PR-only by convention/ruleset, not by this token.
+      contents: write
+      pull-requests: write
+      issues: write
       id-token: write
       actions: read # Required for Claude to read CI results on PRs
     steps:
@@ -38,7 +42,7 @@ jobs:
           # Model policy: see the factory:model-routing skill. Sonnet for
           # responder work, turn-capped. Escalate per-issue by writing
           # "use opus" in the issue body if needed.
-          claude_args: '--model claude-sonnet-5 --max-turns 10'
+          claude_args: '--model claude-sonnet-5 --max-turns 30'
           # The Action does not load the repo's .claude/settings.json (it is
           # stripped from the runner's checkout), so plugins must be
           # self-loaded via these inputs rather than relying on settings.json.
