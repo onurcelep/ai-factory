@@ -39,16 +39,17 @@ If identical, report "already current" and skip.
 | `templates/claude-code-review.yml` | `.github/workflows/claude-code-review.yml` |
 | `templates/settings.json` | `.claude/settings.json` |
 | `templates/MEMORY.md.tmpl` | `docs/memory/MEMORY.md` |
+| `templates/ci-claude-silent-failures.md` | `docs/memory/ci-claude-silent-failures.md` |
 
 For `.claude/settings.json`, if the target exists, MERGE instead of replace:
 add the template's `extraKnownMarketplaces` entry and its `enabledPlugins`
 entries (the template is the source of truth for the marketplace and plugin
 names), preserving everything else in the file.
 
-For `docs/memory/MEMORY.md`, create only if missing. If it already exists,
-leave it completely untouched — after stamping, its content (and every
-fact file beside it) is repo-owned, like `## Project`. Conventions:
-`factory:repo-memory` skill.
+For `docs/memory/MEMORY.md` and the seeded fact file, create only if
+missing. If either already exists, leave it completely untouched — after
+stamping, its content (and every fact file beside it) is repo-owned, like
+`## Project`. Conventions: `factory:repo-memory` skill.
 
 ## 3. Stamp AGENTS.md
 
@@ -83,17 +84,33 @@ end: `<!-- factory:standard:end -->`
 - **Markers already present:** say "already initialized; run /factory-update
   to refresh" and touch nothing.
 
-## 5. Manual-steps checklist (print at the end)
+## 5. Protect main (where the plan allows)
 
-Include only the items the preflight flagged, plus the review step:
+The stamped workflows give @claude write permissions, so "nobody pushes
+`main` directly" must be enforced, not assumed. On public repos (or any
+plan with rulesets), create/update a `protect_main` ruleset on the default
+branch with rules `deletion`, `non_fast_forward`, and `pull_request`
+(`required_approving_review_count: 0` so solo merges stay unblocked), with
+an always-bypass for the repo admin role. On private repos without
+rulesets, note in the checklist that the guarantee is convention-only.
+
+## 6. Manual-steps checklist (print at the end)
+
+Include only the items the preflight flagged, plus the review and smoke
+steps:
 
 1. Install the Claude GitHub App on this repo: https://github.com/apps/claude
 2. Set the auth secret: `gh secret set CLAUDE_CODE_OAUTH_TOKEN`
    (generate via `claude setup-token` if needed).
 3. Review the stamped files, then commit them per this repo's rules (the
    skill does not commit for you).
+4. **Smoke-test the full loop before relying on it** (see
+   `factory:ci-agent-ops`): file a trivial one-file task tagging @claude,
+   confirm it pushes a `claude/` branch and posts a "Create PR ➔" link,
+   open the PR from the link, confirm the auto review posts, then merge or
+   close. A pipeline that has never completed one loop is not set up.
 
-## 6. Report
+## 7. Report
 
 List every file written/skipped/merged and the checklist above. Idempotent:
 re-running on a stamped repo must produce only "already current" and the
