@@ -134,7 +134,8 @@ flowchart TD
 
 - Locally, a one-time `claude plugin install factory@onur` may be needed —
   `enabledPlugins` alone does not always surface a plugin.
-- `superpowers` (the process-skills plugin) loads local + cloud only; the
+- `superpowers` (the default process-skills plugin, swappable — see
+  [Use it as a base](#use-it-as-a-base)) loads local + cloud only; the
   turn-capped Action responder has no use for it and skips it deliberately.
 
 ## The decisions
@@ -150,7 +151,7 @@ deliberate decision; the linked skill or template is its source of truth.
 | CLAUDE.md is layered: a marker-fenced standard block owned by `/factory-update`, and a `## Project` section owned by the repo forever — updates can never destroy repo-specific knowledge. | `templates/CLAUDE.md.tmpl` |
 | Agent memory is committed to the repo (`docs/memory/`: index + one fact per file), so local, cloud, and Action sessions share the same knowledge with zero machine state. | `repo-memory` skill |
 | Plugin wiring is redundant by design: `.claude/settings.json` covers local and cloud sessions; the workflows self-load the plugin for Action runs, which strip `settings.json`. | `templates/settings.json` + workflows |
-| superpowers is the process layer for local and cloud sessions only; it is intentionally not loaded into Action runs (context cost, no benefit for a turn-capped responder). | `templates/settings.json` |
+| The process layer is a swappable default, not a hard dependency: the shipped template enables `superpowers` for local and cloud sessions only (intentionally not loaded into Action runs — context cost, no benefit for a turn-capped responder), but the validator requires only `factory@<marketplace>`. Drop or replace it by editing one line in the template (see [Use it as a base](#use-it-as-a-base)). | `templates/settings.json` |
 | One secret per consumer repo (`CLAUDE_CODE_OAUTH_TOKEN`); this repo stays public and never carries secrets. | `/factory-init` checklist |
 | `AGENTS.md` is a thin cross-tool pointer to CLAUDE.md, nothing more. | `templates/AGENTS.md.tmpl` |
 
@@ -171,6 +172,13 @@ so it passes for any fork). Review the diff, optionally put your own name
 in the two manifests' owner/author fields, push — then continue from
 [Quick start](#quick-start) with your own slug. Keep the fork public and
 secret-free; from there the skills and templates are yours to edit.
+
+The process layer is a default, not a requirement. To drop it, delete the
+`"superpowers@claude-plugins-official": true` line from
+`plugins/factory/templates/settings.json`; to swap it, replace that line
+with your own plugin's `"<plugin>@<marketplace>": true` (and add its
+marketplace under `extraKnownMarketplaces`). The validator only requires
+`factory@<marketplace>`, so it stays green either way.
 
 ## Repo layout
 
