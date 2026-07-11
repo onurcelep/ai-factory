@@ -74,3 +74,8 @@ If the propagation workflow is set up (see `docs/OPERATIONS.md`), stale
 repos should already have an open update issue — link any found
 (`gh issue list -R <owner>/<repo> --search "factory-update in:title"`)
 instead of just saying "run it manually".
+
+For fleet **spend** (private, never documented anywhere): run
+`scripts/cost-report.sh` from an ai-factory checkout — it prints the
+month's per-repo, per-workflow `total_cost_usd` to the terminal only.
+Usage and cadence: `docs/OPERATIONS.md`.
