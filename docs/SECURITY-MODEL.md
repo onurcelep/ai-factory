@@ -51,7 +51,7 @@ the value there.
 | Facet | Detail |
 |---|---|
 | **Trigger surface** | Every `pull_request` event (`opened`/`synchronize`/`ready_for_review`/`reopened`) — see the `on:` block. |
-| **Token + effective permissions** | Near-read-only: the `permissions:` block in `templates/claude-code-review.yml` grants no `contents` write — this job cannot push. `issues: write` exists solely for the assertion step's self-report comment; it adds no capability class the job lacks (the app token already posts the review comment). Read the block for the exact scopes. |
+| **Token + effective permissions** | Near-read-only: the `permissions:` block in `templates/claude-code-review.yml` grants no `contents` write — this job cannot push. `pull-requests: write` exists solely for the assertion step's self-report comment (PR comments require this scope, not `issues: write` — verified via a live 403); it adds no capability class the job lacks (the app token already posts the review comment). Read the block for the exact scopes. |
 | **Injection surfaces** | The PR diff and PR/issue metadata it reviews — untrusted, since a machine-authored PR is exactly the case this reviews. |
 | **Mitigation holding each risk** | **Bot-authored PRs still get reviewed: the `allowed_bots: 'claude'` allowlist** — the action rejects non-human actors by default, so the responder's own `claude`-authored proposals are explicitly allowlisted so they are *not* skipped. The blast radius is bounded structurally: **no contents write** means even a fully injected review agent cannot push; the only write surface is comment posting, which the app token already had. |
 
