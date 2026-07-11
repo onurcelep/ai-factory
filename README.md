@@ -175,9 +175,11 @@ secret-free; from there the skills and templates are yours to edit.
 
 The process layer is a default, not a requirement. To drop it, delete the
 `"superpowers@claude-plugins-official": true` line from
-`plugins/factory/templates/settings.json`; to swap it, replace that line
-with your own plugin's `"<plugin>@<marketplace>": true` (and add its
-marketplace under `extraKnownMarketplaces`). The validator only requires
+`plugins/factory/templates/settings.json` — and the comma that ended the
+line above it, now the last entry (JSON forbids a trailing comma); to swap
+it, replace that line in place with your own plugin's
+`"<plugin>@<marketplace>": true` (and add its marketplace under
+`extraKnownMarketplaces`). The validator only requires
 `factory@<marketplace>`, so it stays green either way.
 
 ## Repo layout
