@@ -15,12 +15,14 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       # Trust boundary for these scopes: docs/SECURITY-MODEL.md (review row).
-      # issues:write exists ONLY so the assertion step below can post its
-      # self-report comment on the PR when a run fails; it adds no capability
-      # class the job lacks (the app token already posts the review comment).
+      # pull-requests:write exists ONLY so the assertion step below can post
+      # its self-report comment on the PR when a run fails (PR comments need
+      # this scope, not issues:write — verified via a live 403); it adds no
+      # capability class the job lacks (the app token already posts the
+      # review comment). contents stays read: this job can never push.
       contents: read
-      pull-requests: read
-      issues: write
+      pull-requests: write
+      issues: read
       id-token: write
 
     steps:
@@ -98,12 +100,11 @@ jobs:
               "Run: $RUN_URL — diagnosis order: the factory:ci-agent-ops skill.")
             local cid
             cid=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-              --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>&1 | head -2 || true)
-            echo "cid lookup result: [$cid]"
+              --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>/dev/null || true)
             if [ -n "${cid:-}" ] && [ "$cid" != "null" ]; then
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" 2>&1 | head -5 || true
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" >/dev/null 2>&1 || echo "self-report: comment update failed (fail-open)"
             else
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" 2>&1 | head -5 || true
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" >/dev/null 2>&1 || echo "self-report: comment post failed (fail-open)"
             fi
           }
           if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then

@@ -186,7 +186,7 @@ ok "round-2 wiring (sticky review, canary, decisions rows)"
 for f in claude.yml claude-code-review.yml claude-smoke-test.yml; do
   grep -q 'factory:ci-self-report' "$T/$f" || fail "$f must carry the self-report mechanism"
 done
-grep -q 'issues: write' "$T/claude-code-review.yml" || fail "review template needs issues:write for the self-report comment"
+grep -q 'pull-requests: write' "$T/claude-code-review.yml" || fail "review template needs pull-requests:write for the self-report comment (PR comments use this scope, not issues:write)"
 grep -q 'issues: write' "$T/claude-smoke-test.yml" || fail "smoke template needs issues:write for the health issue"
 grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must discriminate the anti-tamper skip"
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
