@@ -100,9 +100,9 @@ jobs:
             cid=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
               --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>/dev/null || true)
             if [ -n "${cid:-}" ] && [ "$cid" != "null" ]; then
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" >/dev/null 2>&1 || true
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" >/dev/null 2>&1 || echo "self-report PATCH failed: $?"
             else
-              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" >/dev/null 2>&1 || true
+              gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" 2>&1 | head -5 || true
             fi
           }
           if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
