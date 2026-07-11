@@ -22,6 +22,14 @@ by artifacts and by the result JSON in the run log:
   did no work, whatever the check says.
 - **Honest failures** (`error_max_turns`, push 403) report as failures;
   read the last comment for what blocked it.
+- **Anti-tamper skip (looks dead, is not):** on any PR that modifies a
+  `claude*.yml` workflow file, the action refuses to run — the workflow
+  file must be identical to the default branch's version — and produces
+  an instant no-artifact run (red where the assertion step exists, green
+  and silent where it does not). This is NOT a token failure: do not
+  rotate anything. Expected on factory-update PRs that touch workflows;
+  the run behaves normally again after merge. Discriminate by reading
+  the run log for "Workflow validation failed".
 
 ## Diagnosis order for dead-on-arrival runs
 
