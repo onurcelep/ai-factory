@@ -21,6 +21,9 @@ jobs:
       # contents plus the OIDC token the action needs is the whole surface.
       contents: read
       id-token: write
+      # issues:write exists ONLY so a failing probe can file/update the
+      # "CI health" issue (self-report) — a scheduled red is otherwise invisible.
+      issues: write
     steps:
       - name: Checkout repository
         uses: actions/checkout@v6
@@ -52,15 +55,39 @@ jobs:
         env:
           EXECUTION_FILE: ${{ steps.smoke.outputs.execution_file }}
           CLAUDE_OUTCOME: ${{ steps.smoke.outcome }}
+          GH_TOKEN: ${{ github.token }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
           set -euo pipefail
+          # Self-report: a scheduled red on a repo nobody is watching is
+          # invisible — so a failing smoke test files (or updates) a health
+          # issue instead of relying on someone reading Actions. Fail-open:
+          # an issue-posting error never masks the red check.
+          TITLE="CI health: Claude smoke test failing"
+          report() {
+            local body
+            body=$(printf '%s\n' \
+              '<!-- factory:ci-self-report -->' \
+              "$1" '' \
+              "Run: $RUN_URL — diagnosis order: the factory:ci-agent-ops skill." \
+              'This issue was filed automatically by the smoke-test workflow; close it once a rerun passes.')
+            local num
+            num=$(gh issue list --state open --search "\"$TITLE\" in:title" --json number --jq '.[0].number' 2>/dev/null || true)
+            if [ -n "${num:-}" ] && [ "$num" != "null" ]; then
+              gh issue comment "$num" --body "$body" >/dev/null 2>&1 || true
+            else
+              gh issue create --title "$TITLE" --body "$body" >/dev/null 2>&1 || true
+            fi
+          }
           if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
-            echo "::error::Silent failure: claude-code-action produced no execution log (step outcome: $CLAUDE_OUTCOME). The CLAUDE_CODE_OAUTH_TOKEN is the first suspect — see the factory:ci-agent-ops skill."
+            report "**Silent failure.** The smoke probe produced no execution log (step outcome: $CLAUDE_OUTCOME). Suspect CLAUDE_CODE_OAUTH_TOKEN first; verify only in CI (local token checks are a trap — the CLI silently prefers keychain credentials)."
+            echo "::error::Smoke test: no execution log (outcome: $CLAUDE_OUTCOME). A health issue was filed."
             exit 1
           fi
           RESULT=$(jq -c 'if type == "array" and length > 0 then .[-1] else {} end | select(.type == "result")' "$EXECUTION_FILE" 2>/dev/null || true)
           if [ -z "$RESULT" ]; then
-            echo "::error::Silent failure: no result message in the execution log. The run did not complete a turn — check the CLAUDE_CODE_OAUTH_TOKEN and the Claude GitHub App install (factory:ci-agent-ops)."
+            report "**No result message in the smoke probe's execution log.** The run did not complete a turn — check CLAUDE_CODE_OAUTH_TOKEN and the Claude GitHub App installation."
+            echo "::error::Smoke test: no result message in the execution log. A health issue was filed."
             exit 1
           fi
           IS_ERROR=$(jq -r '.is_error // false' <<<"$RESULT")
@@ -69,7 +96,8 @@ jobs:
           COST_IS_ZERO=$(jq -rn --argjson c "${COST:-0}" '$c == 0')
           echo "claude-code-action result: is_error=$IS_ERROR num_turns=$NUM_TURNS total_cost_usd=$COST"
           if [ "$IS_ERROR" = "true" ] && [ "$NUM_TURNS" -le 1 ] && [ "$COST_IS_ZERO" = "true" ]; then
-            echo "::error::Dead-on-arrival signature (is_error / 1 turn / \$0). CLAUDE_CODE_OAUTH_TOKEN is almost certainly bad — regenerate it. See the factory:ci-agent-ops skill."
+            report "**Dead-on-arrival signature** (is_error / 1 turn / USD 0): CLAUDE_CODE_OAUTH_TOKEN is almost certainly bad. Rotate with claude setup-token + gh secret set CLAUDE_CODE_OAUTH_TOKEN, then re-run this workflow (workflow_dispatch) and close this issue when it passes."
+            echo "::error::Smoke test: dead-on-arrival signature. A health issue was filed."
             exit 1
           fi
           echo "Smoke test passed: the action ran a turn and billed real work."
