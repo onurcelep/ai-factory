@@ -43,7 +43,10 @@ SLUG=$(python3 -c "import json; print(json.load(open('$T/settings.json'))['extra
   || fail "settings.json must wire marketplace '$MKT' to a github repo"
 [ -n "$SLUG" ] || fail "settings.json marketplace '$MKT' must name a repo slug"
 grep -q "\"factory@$MKT\": true" "$T/settings.json" || fail "settings.json must enable factory@$MKT"
-grep -q 'superpowers@claude-plugins-official' "$T/settings.json" || fail "settings.json must enable superpowers"
+# factory@$MKT is the only structurally required plugin. Additional enabled
+# plugins (the shipped template also enables superpowers as the author's
+# default process layer) are allowed but intentionally not required by name,
+# so a fork can drop or swap the process layer without patching this suite.
 grep -qF '<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing begin marker"
 grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing end marker"
 grep -q 'CLAUDE_CODE_OAUTH_TOKEN' "$T/claude.yml" || fail "claude.yml must use CLAUDE_CODE_OAUTH_TOKEN"
