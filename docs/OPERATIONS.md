@@ -220,3 +220,20 @@ would gate only the local/cloud half of the fleet while CI kept tracking
 `main`, so it would add a promotion ritual without actually protecting the
 channel that matters most. Rejected in favor of the revert runbook, which
 is one lever that covers the whole fleet.
+
+Two stamped guards automate what the skill describes, so a bad
+`CLAUDE_CODE_OAUTH_TOKEN` no longer waits for a human to notice a
+missing artifact:
+
+- **`claude-smoke-test.yml`** — a weekly (off-minute cron) plus
+  on-demand (`workflow_dispatch`) liveness probe. It runs a one-turn
+  Haiku "pong" and fails red if the action's `execution_file` result
+  message matches the dead-on-arrival signature (`is_error:true` /
+  `num_turns:1` / `total_cost_usd:0`). Run it manually from the Actions
+  tab right after any token / secret / App change.
+- **Post-run assertions** in `claude.yml` and `claude-code-review.yml`
+  — after the action step, an assertion parses the same `execution_file`
+  and fails on that exact three-way conjunction, so a dead token turns
+  the very first affected run red instead of green. Honest failures
+  (max-turns, push 403) already report red, so the conjunction is scoped
+  to fire only on the silent case.

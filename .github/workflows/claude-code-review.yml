@@ -51,3 +51,40 @@ jobs:
           # anthropics/claude-code@6dcc7d8b (2026-02-11) the command posts
           # nothing without it, leaving the review only in the runner log.
           prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+
+      - name: Assert the review was not a silent failure
+        # A bad CLAUDE_CODE_OAUTH_TOKEN makes claude-code-action exit 0 (green
+        # check) while doing nothing: the execution log's final result message
+        # reads is_error:true / num_turns:1 / total_cost_usd:0, and the PR gets
+        # a green review check with no review comment. Honest failures already
+        # turn the check red, so this fires ONLY on that exact three-way
+        # conjunction. The action documents an `execution_file` output (path to
+        # a JSON array of SDK messages whose last element is the result message).
+        # !cancelled() keeps a superseded run (cancel-in-progress above) from
+        # failing on an empty log.
+        if: ${{ !cancelled() }}
+        env:
+          EXECUTION_FILE: ${{ steps.claude-review.outputs.execution_file }}
+          CLAUDE_OUTCOME: ${{ steps.claude-review.outcome }}
+        run: |
+          set -euo pipefail
+          if [ -z "$EXECUTION_FILE" ] || [ ! -s "$EXECUTION_FILE" ]; then
+            if [ "$CLAUDE_OUTCOME" = "failure" ]; then
+              echo "Review step already failed for an honest reason; no execution log to assert on."
+              exit 0
+            fi
+            echo "::error::Silent failure: claude-code-action exited green but wrote no execution log. Suspect CLAUDE_CODE_OAUTH_TOKEN — see the factory:ci-agent-ops skill."
+            exit 1
+          fi
+          RESULT=$(jq -c 'if type == "array" and length > 0 then .[-1] else {} end | select(.type == "result")' "$EXECUTION_FILE" 2>/dev/null || true)
+          [ -n "$RESULT" ] || { echo "No result message in the execution log; treating as inconclusive."; exit 0; }
+          IS_ERROR=$(jq -r '.is_error // false' <<<"$RESULT")
+          NUM_TURNS=$(jq -r '.num_turns // 0' <<<"$RESULT")
+          COST=$(jq -r '.total_cost_usd // 0' <<<"$RESULT")
+          COST_IS_ZERO=$(jq -rn --argjson c "${COST:-0}" '$c == 0')
+          echo "claude-code-action result: is_error=$IS_ERROR num_turns=$NUM_TURNS total_cost_usd=$COST"
+          if [ "$IS_ERROR" = "true" ] && [ "$NUM_TURNS" -le 1 ] && [ "$COST_IS_ZERO" = "true" ]; then
+            echo "::error::Dead-on-arrival signature (is_error / 1 turn / \$0). CLAUDE_CODE_OAUTH_TOKEN is almost certainly bad — regenerate it. See the factory:ci-agent-ops skill."
+            exit 1
+          fi
+          echo "Health assertion passed."
