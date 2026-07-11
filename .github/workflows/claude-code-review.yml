@@ -51,7 +51,13 @@ jobs:
           # --comment is required for the findings to reach the PR: since
           # anthropics/claude-code@6dcc7d8b (2026-02-11) the command posts
           # nothing without it, leaving the review only in the runner log.
-          prompt: '/code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment'
+          # The memory nudge below makes this reviewer the enforcement point for
+          # the factory:repo-memory write path (its YES/NO lists are the criteria):
+          # agents under turn pressure skip the memory write first, and nothing
+          # else notices the omission.
+          prompt: |
+            /code-review:code-review ${{ github.repository }}/pull/${{ github.event.pull_request.number }} --comment
+            Additionally: if this change clearly reflects a non-obvious, reusable learning by the factory:repo-memory skill's criteria (an environment quirk, a hard-won gotcha, a cross-component contract — not anything derivable from the code or git history) and the PR neither adds nor updates a docs/memory/ fact, report that as a finding. Routine changes must not be flagged.
 
       - name: Assert the review was not a silent failure
         # A bad CLAUDE_CODE_OAUTH_TOKEN makes claude-code-action exit 0 (green

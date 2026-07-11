@@ -133,4 +133,19 @@ ok "settings/merge preserves repo keys and adds template wiring"
 cmp -s "$TMP/settings.json" "$TMP/settings2.json" || fail "settings/merge not idempotent"
 ok "settings/merge idempotent"
 
+# --- Case 6: settings.json merge preserves a consumer's ref/sha pin ---
+"${STAMP[@]}" merge-settings --template "$ST" --target "$FX/settings/pinned-input.json" >"$TMP/pinned.json"
+check_or_regen "settings/pinned-merge" "$FX/settings/pinned-expected.json" "$TMP/pinned.json"
+python3 - "$TMP/pinned.json" <<'PYEOF' || fail "settings/pinned-merge lost the repo's ref/sha pin"
+import json, sys
+src = list(json.load(open(sys.argv[1]))["extraKnownMarketplaces"].values())[0]["source"]
+assert src.get("ref") == "v0.5.0", "ref pin dropped"
+assert src.get("sha", "").startswith("0123456789"), "sha pin dropped"
+PYEOF
+ok "settings/pinned-merge preserves the stability pin"
+# Idempotency
+"${STAMP[@]}" merge-settings --template "$ST" --target "$TMP/pinned.json" >"$TMP/pinned2.json"
+cmp -s "$TMP/pinned.json" "$TMP/pinned2.json" || fail "settings/pinned-merge not idempotent"
+ok "settings/pinned-merge idempotent"
+
 echo "STAMPING TESTS PASSED"

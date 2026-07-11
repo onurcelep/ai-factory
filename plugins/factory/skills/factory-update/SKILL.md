@@ -81,7 +81,10 @@ them when applying the template diff and call them out in the report.
 For `.claude/settings.json`, merge (preserve any repo-added keys); only
 ensure the template's `extraKnownMarketplaces` entry and its
 `enabledPlugins` entries are present and current (the template is the
-source of truth for the marketplace and plugin names).
+source of truth for the marketplace and plugin names). Exception: a
+`ref`/`sha` pin on a marketplace source is repo-owned (the stability
+opt-in in `docs/OPERATIONS.md`) — never remove it; reference semantics:
+`scripts/lib/factory_stamp.py merge-settings` (golden-tested).
 
 ## 3. Ensure the memory index exists
 
