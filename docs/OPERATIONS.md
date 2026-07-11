@@ -94,6 +94,15 @@ doc-only changes — skills reach every CI agent on their next run without
 a release, and a version bump would file stamp-only update PRs in every
 repo for no delivered change.
 
+This rule is enforced, not just documented. The **Version Guard**
+workflow (`.github/workflows/version-guard.yml`) fails any PR whose diff
+touches `plugins/factory/templates/**` without a version change in
+`plugin.json` relative to the merge base; skill-only and doc-only PRs
+pass untouched. The same check runs locally — `./scripts/validate.sh`
+invokes `scripts/check-version-bump.sh`, which compares against
+`origin/main` and skips gracefully when no merge base is derivable. To
+run it standalone: `scripts/check-version-bump.sh [base-ref]`.
+
 ## How staleness is detected
 
 `/factory-init` and `/factory-update` write a machine-readable stamp into
@@ -105,9 +114,13 @@ the CLAUDE.md standard block:
 
 `factory-status` and the propagation workflow grep for that line and
 compare against `plugins/factory/.claude-plugin/plugin.json` on the
-marketplace's main. Repos stamped before v0.5.0 have markers but no
-version line — they are reported as "stamped, version unknown"; one
-`/factory-update` adds the stamp.
+marketplace's main. The comparison is **version-aware** (`sort -V`, not
+string equality): stamped `<` latest is stale; stamped `==` latest is
+current; stamped `>` latest is reported "ahead" and gets no update issue
+(so a repo stamped from a newer testing branch is never downgraded).
+Repos stamped before v0.5.0 have markers but no version line — they are
+reported as "stamped, version unknown"; one `/factory-update` adds the
+stamp.
 
 ## CI agent health
 

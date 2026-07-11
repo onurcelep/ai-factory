@@ -113,4 +113,14 @@ ok "propagation + operations doc"
 bash scripts/test-stamping.sh || fail "stamping golden-file tests failed (see output above)"
 ok "stamping semantics (golden-file tests)"
 
+# --- Version-bump guard: template changes require a plugin.json version bump ---
+# CI enforces this on PRs via .github/workflows/version-guard.yml; the same
+# script runs here so a local ./scripts/validate.sh catches it before push.
+# It skips gracefully when no merge base is derivable (e.g. fresh clone).
+[ -x scripts/check-version-bump.sh ] || fail "scripts/check-version-bump.sh missing or not executable"
+[ -f .github/workflows/version-guard.yml ] || fail "version-guard.yml missing"
+grep -q 'check-version-bump.sh' .github/workflows/version-guard.yml || fail "version-guard.yml must invoke check-version-bump.sh"
+scripts/check-version-bump.sh || fail "template change without a version bump (see message above)"
+ok "version-bump guard"
+
 echo "ALL CHECKS PASSED"

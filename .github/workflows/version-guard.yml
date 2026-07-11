@@ -1,0 +1,38 @@
+name: Version Guard
+
+# Fail a PR that changes anything under plugins/factory/templates/** without
+# bumping the plugin version in plugins/factory/.claude-plugin/plugin.json.
+# The version is the propagation trigger and staleness comparison key, so an
+# unbumped template change silently never reaches consumers. Skill-only and
+# doc-only PRs are exempt (see docs/OPERATIONS.md "When to bump").
+#
+# This workflow does not share a basename with any template, so it is exempt
+# from the dogfood byte-identity check in scripts/validate.sh and can live
+# here directly. It uses only the default GITHUB_TOKEN (read-only).
+
+on:
+  pull_request:
+    paths:
+      - 'plugins/factory/templates/**'
+      - 'plugins/factory/.claude-plugin/plugin.json'
+      - 'scripts/check-version-bump.sh'
+      - '.github/workflows/version-guard.yml'
+
+concurrency:
+  group: version-guard-${{ github.event.pull_request.number }}
+  cancel-in-progress: true
+
+jobs:
+  version-bump:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+    steps:
+      - name: Checkout PR head with full history
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.event.pull_request.head.sha }}
+          fetch-depth: 0
+
+      - name: Require a version bump when templates change
+        run: scripts/check-version-bump.sh "${{ github.event.pull_request.base.sha }}"
