@@ -51,13 +51,13 @@ jobs:
             [ "$repo" = "$SELF" ] && continue
             claude_md=$(gh api "repos/$OWNER/$repo/contents/CLAUDE.md" --jq .content 2>/dev/null | base64 -d 2>/dev/null) || continue
             echo "$claude_md" | grep -q 'factory:standard:begin' || continue
-            stamped=$(echo "$claude_md" | grep -o 'factory:version [0-9.]*' | awk '{print $2}' | head -1)
+            stamped=$(echo "$claude_md" | grep -o 'factory:version [0-9.]*' | awk '{print $2}' | head -1 || true)
             if [ "$stamped" = "$VERSION" ]; then
               echo "$repo: current ($VERSION)"
               continue
             fi
             title="factory-update to ${VERSION}"
-            existing=$(gh issue list -R "$OWNER/$repo" --state open --search "\"$title\" in:title" --json number --jq length)
+            existing=$(gh issue list -R "$OWNER/$repo" --state open --search "\"$title\" in:title" --json number --jq length || true)
             if [ "${existing:-0}" -gt 0 ]; then
               echo "$repo: stale (${stamped:-pre-0.5.0}) — update issue already open"
               continue
