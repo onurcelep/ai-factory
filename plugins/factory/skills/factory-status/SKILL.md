@@ -42,10 +42,28 @@ Repos with markers but no version line were stamped before v0.5.0 —
 report them as "stamped, version unknown (pre-0.5.0): run /factory-update
 to add the stamp".
 
-## 3. Report
+## 3. Compare (version-aware, not string equality)
+
+Do **not** compare `stamped == latest` as strings — a repo stamped from a
+newer testing branch would read as stale and get a pointless downgrade.
+Compare semantically with `sort -V` (dependency-free); the verdict is:
+
+- stamped **==** latest → **current**
+- stamped **>** latest → **ahead** (stamped from a newer/testing build; not stale, no update)
+- stamped **<** latest → **STALE — run /factory-update**
+- marker but no version line → **stamped-unversioned (pre-0.5.0)**
+
+```bash
+# verdict for one repo, given $stamped and $LATEST
+if [ "$stamped" = "$LATEST" ]; then verdict=current
+elif [ "$(printf '%s\n%s\n' "$stamped" "$LATEST" | sort -V | tail -1)" = "$stamped" ]; then verdict=ahead
+else verdict="STALE — run /factory-update"; fi
+```
+
+## 4. Report
 
 A table: repo · stamped version · latest version · verdict
-(**current** / **STALE — run /factory-update** / stamped-unversioned).
+(**current** / **ahead** / **STALE — run /factory-update** / stamped-unversioned).
 Also report the locally installed plugin version (`claude plugin list` or
 the plugin cache's plugin.json) against `LATEST`, with the fix
 (`claude plugin update factory@<marketplace>`); local sessions load skills

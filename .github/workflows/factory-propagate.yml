@@ -52,9 +52,19 @@ jobs:
             claude_md=$(gh api "repos/$OWNER/$repo/contents/CLAUDE.md" --jq .content 2>/dev/null | base64 -d 2>/dev/null) || continue
             echo "$claude_md" | grep -q 'factory:standard:begin' || continue
             stamped=$(echo "$claude_md" | grep -o 'factory:version [0-9.]*' | awk '{print $2}' | head -1 || true)
-            if [ "$stamped" = "$VERSION" ]; then
-              echo "$repo: current ($VERSION)"
-              continue
+            # Version-aware comparison (sort -V, dependency-free): a repo stamped
+            # >= latest is current — treat "ahead" (stamped from a newer testing
+            # branch) as current so it never gets a pointless downgrade issue.
+            if [ -n "$stamped" ]; then
+              if [ "$stamped" = "$VERSION" ]; then
+                echo "$repo: current ($VERSION)"
+                continue
+              fi
+              highest=$(printf '%s\n%s\n' "$stamped" "$VERSION" | sort -V | tail -1)
+              if [ "$highest" = "$stamped" ]; then
+                echo "$repo: ahead ($stamped > $VERSION) — no update"
+                continue
+              fi
             fi
             title="factory-update to ${VERSION}"
             existing=$(gh issue list -R "$OWNER/$repo" --state open --search "\"$title\" in:title" --json number --jq length || true)
