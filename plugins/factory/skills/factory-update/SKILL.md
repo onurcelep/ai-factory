@@ -69,8 +69,15 @@ burn turns retrying the push.
 
 Templates below refer to the source resolved in step 0.
 
-Same diff-and-confirm copy as factory-init, same targets:
-`.github/workflows/claude.yml`, `.github/workflows/claude-code-review.yml`.
+Same diff-and-confirm copy as factory-init, same targets: **every
+workflow row of factory-init's step-2 stamp table** (each
+`templates/*.yml` whose target is `.github/workflows/<name>`) — do not
+restate the list here; a template workflow added later must ride updates
+without this skill changing. A workflow template with no counterpart in
+the repo is NEW: stamp it (it is part of the standard, not a repo
+extra). Repo-specific additions inside an existing workflow (say, an
+extra `--allowedTools` flag or an extra input) are repo-owned — preserve
+them when applying the template diff and call them out in the report.
 For `.claude/settings.json`, merge (preserve any repo-added keys); only
 ensure the template's `extraKnownMarketplaces` entry and its
 `enabledPlugins` entries are present and current (the template is the
