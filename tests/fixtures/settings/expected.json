@@ -1,0 +1,20 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npm test)"
+    ]
+  },
+  "enabledPlugins": {
+    "some-other-plugin@some-market": true,
+    "factory@onur": true,
+    "superpowers@claude-plugins-official": true
+  },
+  "extraKnownMarketplaces": {
+    "onur": {
+      "source": {
+        "source": "github",
+        "repo": "onurcelep/ai-factory"
+      }
+    }
+  }
+}

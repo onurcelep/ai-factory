@@ -84,6 +84,8 @@ its content and the fact files beside it are repo-owned, like `## Project`.
 
 ## 4. Refresh the CLAUDE.md standard block
 
+The marker-block splice below is encoded as executable truth in `scripts/lib/factory_stamp.py` (`update-splice`) in the ai-factory repo, golden-tested by `scripts/test-stamping.sh` — match its behaviour exactly.
+
 Extract the text between (and including) the two markers from
 `templates/CLAUDE.md.tmpl`, replace `{{FACTORY_VERSION}}` in it with the
 version resolved in step 0 (the `<!-- factory:version ... -->` line is the

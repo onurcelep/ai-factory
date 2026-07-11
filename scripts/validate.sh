@@ -105,4 +105,12 @@ grep -q 'factory-propagate' docs/OPERATIONS.md || fail "OPERATIONS.md must docum
 grep -q 'FACTORY_PROPAGATE_TOKEN' docs/OPERATIONS.md || fail "OPERATIONS.md must document the propagation token"
 ok "propagation + operations doc"
 
+# --- Stamping semantics: golden-file behavioural tests ---
+# validate.sh above checks file presence and string content; this asserts the
+# init/update transforms still behave. The reference implementation encodes the
+# mechanical stamping semantics; a skill-prose edit that changes them fails here.
+[ -f scripts/test-stamping.sh ] || fail "scripts/test-stamping.sh missing"
+bash scripts/test-stamping.sh || fail "stamping golden-file tests failed (see output above)"
+ok "stamping semantics (golden-file tests)"
+
 echo "ALL CHECKS PASSED"
