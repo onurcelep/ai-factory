@@ -27,8 +27,15 @@ cd my-project && git init
 claude  →  /factory-init      # stamps everything, prints the manual steps
 
 # after templates change in ai-factory
-claude  →  /factory-update    # inside each consuming repo
+claude  →  /factory-update    # inside each consuming repo — or enable
+                              # auto-propagation and never run it by hand
+claude  →  /factory-status    # fleet check: which repos are stale
 ```
+
+Day-2 operations — the four update channels, onboarding an existing repo,
+and one-time setup for **automatic propagation** (template changes file
+@claude update issues in every stale repo for you): see
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 `/factory-init` stamps the two `@claude` workflows, `.claude/settings.json`
 plugin wiring, a marker-fenced `CLAUDE.md`, `AGENTS.md`, and a
