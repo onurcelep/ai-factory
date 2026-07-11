@@ -98,9 +98,10 @@ jobs:
               "Run: $RUN_URL — diagnosis order: the factory:ci-agent-ops skill.")
             local cid
             cid=$(gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
-              --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>/dev/null || true)
+              --jq '[.[] | select(.body | startswith("<!-- factory:ci-self-report -->"))][0].id' 2>&1 | head -2 || true)
+            echo "cid lookup result: [$cid]"
             if [ -n "${cid:-}" ] && [ "$cid" != "null" ]; then
-              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" >/dev/null 2>&1 || echo "self-report PATCH failed: $?"
+              gh api -X PATCH "repos/${GITHUB_REPOSITORY}/issues/comments/${cid}" -f body="$body" 2>&1 | head -5 || true
             else
               gh api -X POST "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" -f body="$body" 2>&1 | head -5 || true
             fi
