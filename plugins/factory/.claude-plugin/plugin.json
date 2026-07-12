@@ -1,7 +1,7 @@
 {
   "name": "factory",
   "description": "Standard AI-dev setup: /factory-init stamps a repo with @claude workflows, plugin wiring, a marker-fenced CLAUDE.md, and a docs/memory/ index; /factory-update refreshes the standard parts. Ships shared skills (model routing, release flow, repo memory, CI agent ops), routed agents (implementer/reviewer/researcher), and a protect-main hook.",
-  "version": "0.6.4",
+  "version": "0.6.5",
   "author": {
     "name": "Onur Celep"
   }

@@ -1,0 +1,27 @@
+{
+  "skill_name": "factory-status",
+  "trigger": {
+    "positive": [
+      { "prompt": "Which of my repos need a factory update?", "top_k": 1 },
+      { "prompt": "Fleet check: list every stamped repo and whether it is current or stale", "top_k": 2 },
+      { "prompt": "Did the template propagation actually reach all my repositories?", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Update this specific repo to the newest templates", "owner": "factory-update" },
+      { "prompt": "Why did the @claude review run finish instantly without posting anything?", "owner": "ci-agent-ops" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Give me a status report on which of my GitHub repos are factory-stamped and which are behind.",
+      "expected_output": "A per-repo table of stamped repos with their version stamp vs the marketplace's latest, flagging stale ones",
+      "expectations": [
+        "The report is derived from the factory:version stamp in each repo, not guessed",
+        "Each stamped repo is classified as current or stale against the marketplace version",
+        "Repos without the stamp are excluded or listed as unstamped, not misreported"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}

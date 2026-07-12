@@ -1,6 +1,6 @@
 ---
 name: model-routing
-description: Model routing policy for token efficiency. Use when spawning subagents, choosing a model for an agent/workflow, or editing model pins in @claude GitHub workflow files.
+description: Model routing policy for token efficiency. Use when spawning subagents, choosing which model tier (haiku, sonnet, opus) an implementer, reviewer, or research agent should run on, or editing model pins in @claude GitHub workflow files.
 ---
 
 # Model routing (token efficiency)

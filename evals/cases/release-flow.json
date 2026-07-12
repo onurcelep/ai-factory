@@ -1,0 +1,27 @@
+{
+  "skill_name": "release-flow",
+  "trigger": {
+    "positive": [
+      { "prompt": "How should I branch and PR this change?", "top_k": 1 },
+      { "prompt": "This fix is ready, walk me through getting it merged the standard way", "top_k": 2 },
+      { "prompt": "Create a branch for this work and open a pull request when it is done", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Which model tier should the CI review agent pin?", "owner": "model-routing" },
+      { "prompt": "The @claude workflow went green but never opened a PR", "owner": "ci-agent-ops" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I have a small bugfix on my machine. Get it into main following our release discipline.",
+      "expected_output": "A feature branch, a focused PR, no direct pushes to main",
+      "expectations": [
+        "Work happens on a branch, never directly on main",
+        "A pull request is opened rather than merging locally",
+        "The PR is scoped to the single change"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}

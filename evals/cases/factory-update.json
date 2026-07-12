@@ -1,0 +1,27 @@
+{
+  "skill_name": "factory-update",
+  "trigger": {
+    "positive": [
+      { "prompt": "Refresh the standard parts of this repo after the template change", "top_k": 1 },
+      { "prompt": "Bring the managed CLAUDE.md block up to the latest factory version", "top_k": 2 },
+      { "prompt": "The marketplace shipped new workflow templates, update this repo to match", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Stamp this fresh repository with the standard setup", "owner": "factory-init" },
+      { "prompt": "Check the whole fleet for repos that need updating", "owner": "factory-status" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "This repo was stamped a while ago; update it to the current factory standard.",
+      "expected_output": "Only the standard parts refreshed (workflows, settings wiring, marker-fenced block); project-specific content untouched",
+      "expectations": [
+        "Only content between the factory:standard markers in CLAUDE.md is replaced",
+        "Project-specific sections of CLAUDE.md are byte-identical before and after",
+        "Workflow files are re-copied from the plugin templates"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}

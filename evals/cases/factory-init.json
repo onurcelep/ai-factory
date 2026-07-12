@@ -1,0 +1,28 @@
+{
+  "skill_name": "factory-init",
+  "trigger": {
+    "positive": [
+      { "prompt": "Stamp this repo with the standard agent setup", "top_k": 1 },
+      { "prompt": "Make this new project agent-ready with our @claude workflows", "top_k": 2 },
+      { "prompt": "Onboard this existing repository onto the factory standard", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Templates changed upstream, refresh the standard parts of this repo", "owner": "factory-update" },
+      { "prompt": "Which of my repos are running a stale factory version?", "owner": "factory-status" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "Set this repository up with the ai-factory standard: @claude workflows, plugin wiring, and the managed CLAUDE.md block.",
+      "expected_output": "Workflows copied from templates, .claude/settings.json wired to the marketplace, CLAUDE.md containing the marker-fenced standard block with a version stamp",
+      "expectations": [
+        "claude.yml and claude-code-review.yml are created from the plugin templates, not written from scratch",
+        "CLAUDE.md contains the factory:standard:begin and factory:standard:end markers",
+        ".claude/settings.json enables the factory plugin via the marketplace",
+        "The agent tells the operator that the CLAUDE_CODE_OAUTH_TOKEN secret must be configured"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}
