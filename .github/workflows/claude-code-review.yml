@@ -136,4 +136,27 @@ jobs:
             echo "::error::Dead-on-arrival signature (is_error / 1 turn / USD 0). See the PR comment."
             exit 1
           fi
-          echo "Health assertion passed."
+          # Artifact assertion (added after a real incident, 2026-07-12): a
+          # healthy-LOOKING run (37 turns, $5, is_error:false) once posted
+          # nothing — the agent was permission-denied out of commenting
+          # (permission_denials_count: 56) and "completed" by narrating.
+          # Metrics only prove the run worked; the posted comment is what
+          # proves a REVIEW happened. Require one artifact from the app bot
+          # on any of the three surfaces (excluding this step's own
+          # self-report comment).
+          DENIALS=$(jq -r '.permission_denials_count // 0' <<<"$RESULT")
+          ARTIFACTS=$(
+            {
+              gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
+                --jq '.[] | select((.body | startswith("<!-- factory:ci-self-report -->")) | not) | .user.login' 2>/dev/null
+              gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/comments" --paginate --jq '.[].user.login' 2>/dev/null
+              gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --paginate --jq '.[].user.login' 2>/dev/null
+            } | grep -ci 'claude' || true
+          )
+          if [ "${ARTIFACTS:-0}" -eq 0 ]; then
+            report "**Review ran but posted nothing** (num_turns=$NUM_TURNS, cost=$COST, permission_denials=$DENIALS). A review with no posted comment is unverifiable — treat this PR as not reviewed. A high denial count means the agent was blocked from acting (check the workflow's --allowedTools against what CLAUDE.md tells agents to do); retry by pushing a new commit."
+            echo "::error::Review produced no posted artifact (comment/review). See the PR comment."
+            exit 1
+          fi
+          [ "${DENIALS:-0}" -le 20 ] || echo "::warning::High permission-denial count ($DENIALS): the review agent was repeatedly blocked — check --allowedTools vs the instructions it was given."
+          echo "Health + artifact assertions passed (artifacts=$ARTIFACTS, denials=$DENIALS)."
