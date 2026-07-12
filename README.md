@@ -36,7 +36,8 @@ it is a **maintained, opinionated, tested implementation**: every default
 was chosen for a reason you can read (the [decisions](#the-decisions)
 table and the [design spec](docs/superpowers/specs/2026-07-08-ai-factory-design.md)),
 the choices are battle-tested on the author's own repos first, a
-validation suite guards the whole thing, and `rebrand.sh` turns a fork
+validation suite guards the whole thing — including [evals](evals/README.md)
+that test the skills themselves — and `rebrand.sh` turns a fork
 into *your* standard in one command. You are not adopting a framework;
 you are forking a working setup with its reasoning attached.
 
@@ -137,6 +138,34 @@ flowchart TD
 - `superpowers` (the default process-skills plugin, swappable — see
   [Use it as a base](#use-it-as-a-base)) loads local + cloud only; the
   turn-capped Action responder has no use for it and skips it deliberately.
+
+## The skills are tested, not assumed
+
+Skills are prose instructions, and prose regresses silently: a description
+drifts away from the words users actually say and stops triggering, or an
+agent finds a rationalization the wording never closed — all under green
+checks. So the skills carry their own [three-tier eval suite](evals/README.md):
+
+| Tier | Question it answers | Runs |
+|---|---|---|
+| Structural | Are the files well-formed and consistent? | CI, free |
+| Trigger & routing | Do realistic asks reach the right skill, and do the seven skills stay distinct? | CI, free (`scripts/run-evals.py`) |
+| Behavioral | Does an agent *following* the skill actually behave as promised? | on demand, spends tokens (`--behavioral`) |
+
+This earned its place on day one: the first trigger run caught two skills
+whose descriptions lacked the vocabulary of their own signature asks, and
+the first behavioral run caught an agent performing a local `git merge`
+into `main` *with the release-flow rule loaded* — the rule forbade pushes
+but had never closed the local-merge loophole. Both are fixed and now
+regression-guarded.
+
+For consumers of stamped repos nothing changes. For this repo (and forks)
+one rule is new: **every skill ships with an eval case**
+(`evals/cases/<name>.json`); the runner errors on missing files. The suite
+doubles as the model-transition harness — after a model or harness change,
+run Tier 2 plus a targeted behavioral pass and you get a regression report
+instead of a fleet surprise
+([OPERATIONS.md § Model transitions](docs/OPERATIONS.md#model-transitions)).
 
 ## The decisions
 
