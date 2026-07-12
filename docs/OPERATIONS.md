@@ -83,8 +83,8 @@ secret, the workflow skips with a notice — propagation is opt-in.
 Requirements in consumer repos (all standard): the stamped `claude.yml`
 (so @claude answers issues), the Claude GitHub App, and the
 `CLAUDE_CODE_OAUTH_TOKEN` secret (`ANTHROPIC_API_KEY` on API-billing
-forks — see README "Billing"). Consumer repos carry **zero**
-propagation-specific config.
+forks — see [FORKING.md](FORKING.md#billing-subscription-or-api-key)).
+Consumer repos carry **zero** propagation-specific config.
 
 **Known limitation:** GitHub blocks App-token pushes that modify
 `.github/workflows/` files, so a propagated update can deliver
