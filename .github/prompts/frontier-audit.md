@@ -126,6 +126,17 @@ run, cheaply:
    canary failure is itself drift — file it like any other finding. Never
    commit or push anything from the canary.
 
+## Docs canary (every run, before the report)
+
+The docs are hub-and-spoke (README "Where to go" routes one doc per
+question). Each run, pick ONE realistic question a real reader would
+bring — rotate the audience weekly (new user / daily operator / fleet
+maintainer / forker / contributor) — and answer it using ONLY the hub
+table and the single doc it routes to. If the answer required a second
+doc, wasn't findable, or contradicted a pin or another doc, record that
+in the run report as a docs finding (report-only; do not restructure
+docs in a PR — file a frontier-proposal issue if it's structural).
+
 ## Report every run
 
 Whether or not you opened a PR, finish by publishing your closing summary to
