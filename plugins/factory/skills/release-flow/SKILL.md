@@ -19,9 +19,16 @@ brand-new repo's first push, with `FACTORY_ALLOW_MAIN_PUSH=1`).
    real browser, a smoke run) — see the repo's `## Project`.
 3. Open a PR. The auto review (Opus) runs on it; run `/code-review`
    yourself too for anything nontrivial.
-4. A human merges. @claude never merges, and running with `contents: read`
-   it cannot push `main` even by accident.
+4. A human merges. An agent never merges into `main` — not by push and not
+   by a local `git merge`; an agent-performed merge is a direct-to-main
+   change with extra steps. The @claude Action, running with
+   `contents: read`, cannot push `main` even by accident.
 5. Verify after merge (see invariants).
+
+If a PR cannot be opened — no remote, no `gh`, a sandboxed workspace —
+stop at the branch and report that the fix is ready for review. Do not
+"complete" the flow by merging locally; leaving the branch unmerged IS the
+correct final state for an agent.
 
 ## Invariants (hold for every repo)
 

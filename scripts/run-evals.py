@@ -243,6 +243,37 @@ def parse_grading(stdout):
     return grading, None
 
 
+def stage_skill(name, workspace):
+    """Write the skill under test into the workspace's CLAUDE.md.
+
+    Tier 3 measures whether an agent *following the skill* behaves as
+    promised. The throwaway workspace has no plugin wiring, so without this
+    the eval would measure the base model's defaults instead.
+    """
+    body = (SKILLS_DIR / name / "SKILL.md").read_text().split("---", 2)[2]
+    (Path(workspace) / "CLAUDE.md").write_text(
+        f"# Project rules\n\nThis project follows the {name} skill:\n{body}"
+    )
+
+
+def materialize_fixture(ev, workspace):
+    """Write the eval's files[] into the workspace and commit them on main.
+
+    skill-creator schema: files[] entries are {path, content}. An eval with no
+    files runs against a bare repo (and should carry trust_level provisional).
+    """
+    files = ev.get("files", [])
+    if not files:
+        return
+    for f in files:
+        target = Path(workspace) / f["path"]
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_text(f["content"])
+    git = ["git", "-c", "user.email=evals@local", "-c", "user.name=evals"]
+    subprocess.run(git + ["add", "-A"], cwd=workspace, check=True)
+    subprocess.run(git + ["commit", "-q", "-m", "fixture"], cwd=workspace, check=True)
+
+
 def save_debug(label, trace, grader):
     """Preserve the evidence when a behavioral eval fails abnormally."""
     debug_dir = RESULTS_DIR / f"{label.replace('#', '-')}.debug"
@@ -273,11 +304,18 @@ def run_behavioral(target, dry_run):
                 print(f"plan: {label}: would run {ev['prompt']!r} in a throwaway workspace")
                 continue
             workspace = tempfile.mkdtemp(prefix=f"skill-eval-{name}-")
-            subprocess.run(["git", "init", "-q"], cwd=workspace, check=True)
+            subprocess.run(["git", "init", "-q", "-b", "main"], cwd=workspace, check=True)
+            stage_skill(name, workspace)
+            materialize_fixture(ev, workspace)
             print(f"run: {label} in {workspace}")
+            # Explicit tool allowlist: the workspace is throwaway, and without
+            # it permission resolution is environment-dependent — the agent
+            # gets denied and narrates instead of acting, which grades as a
+            # false skill failure.
             executor = subprocess.run(
                 ["claude", "-p", ev["prompt"], "--output-format", "stream-json",
-                 "--verbose", "--permission-mode", "acceptEdits", "--max-turns", "30"],
+                 "--verbose", "--permission-mode", "acceptEdits", "--max-turns", "30",
+                 "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep"],
                 cwd=workspace, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT,
             )
             trace = executor.stdout
