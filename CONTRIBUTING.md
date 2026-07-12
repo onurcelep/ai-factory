@@ -25,6 +25,7 @@ unchanged on any rebranded fork.
 | Workflows in `.github/workflows/` that share a basename with a template stay **byte-identical** to it | This repo dogfoods its own templates; drift here means shipping something untested | validate.sh (re-sync: `cp plugins/factory/templates/<name> .github/workflows/<name>`) |
 | No owner/marketplace literals in functional code or checks | Forks must validate green after `rebrand.sh` with zero patches | validate.sh derives names from the manifests |
 | Auth is either `CLAUDE_CODE_OAUTH_TOKEN` (subscription, shipped default) or `ANTHROPIC_API_KEY` (API-billing forks) | See [FORKING.md § Billing](docs/FORKING.md#billing-subscription-or-api-key) | validate.sh accepts either |
+| Agent instructions that command actions (run a gate, push, commit) must name the roles they bind; load-bearing tool allowlists stay scoped | A read-only agent obeying a change-agent gate fails silently — see [SECURITY-MODEL.md § Role contracts](docs/SECURITY-MODEL.md#role-contracts-instructions--permissions) | validate.sh role-contracts block + the `role: readonly` behavioral eval |
 
 ## Changing skills vs. changing templates
 

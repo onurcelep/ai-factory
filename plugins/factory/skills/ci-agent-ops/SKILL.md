@@ -22,6 +22,14 @@ by artifacts and by the result JSON in the run log:
   did no work, whatever the check says.
 - **Honest failures** (`error_max_turns`, push 403) report as failures;
   read the last comment for what blocked it.
+- **Ran healthy, posted nothing:** `is_error: false`, real turns and cost —
+  and zero comments/reviews on the PR. The agent was blocked from acting
+  (typically permission denials: check `permission_denials_count` in the
+  result JSON) and "completed" by narrating. The review assertion fails
+  this case explicitly since 0.6.7; treat the PR as not reviewed and
+  retry with a new push. A `permission_denials_count` over ~20 on any
+  run means the agent's instructions and its tool allowlist disagree —
+  see the role contracts in ai-factory's `docs/SECURITY-MODEL.md`.
 - **Anti-tamper skip (looks dead, is not):** on any PR that modifies a
   `claude*.yml` workflow file, the action refuses to run — the workflow
   file must be identical to the default branch's version — and produces
@@ -40,6 +48,12 @@ failure vs dead-token signature), and a failing smoke test files/updates a
 **"CI health: Claude smoke test failing"** issue. Check those first; dig
 into run logs only when no self-report exists (which is itself a signal —
 the assertion step never ran).
+
+**Evidence to download, not reconstruct:** since 0.6.7 the review workflow
+preserves the full execution trace as a run artifact
+(`claude-review-execution-<run id>`, 14-day retention) whenever the
+assertion fails or the denial count is high. It lists every tool call and
+every denial — start diagnosis there instead of grepping suppressed logs.
 
 ## Diagnosis order for dead-on-arrival runs
 
