@@ -270,6 +270,38 @@ purely commercial: subscription runs are capped by your plan's limits;
 API runs are uncapped and metered (watch them with
 `scripts/cost-report.sh`).
 
+### Choosing your models
+
+Model choice is a fork decision, not a config option: every model is
+pinned explicitly *where it runs*, so rerouting is a one-time edit in
+your fork rather than indirection the workflows resolve at runtime. The
+complete list of pin locations:
+
+| What | Where the pin lives | Shipped default |
+|---|---|---|
+| `@claude` issue/PR responder | `plugins/factory/templates/claude.yml` → `claude_args: '--model … --max-turns …'` | Sonnet, turn-capped |
+| Automatic PR review | `plugins/factory/templates/claude-code-review.yml` → `claude_args` | Opus (once per PR, depth pays) |
+| Scheduled smoke probe | `plugins/factory/templates/claude-smoke-test.yml` → `claude_args` | Haiku (a liveness check needs no depth) |
+| Routed subagents | `plugins/factory/agents/factory-{implementer,reviewer,researcher}.md` → `model:` frontmatter | haiku / sonnet / opus |
+| The routing *policy* (when to use which) | `plugins/factory/skills/model-routing/SKILL.md` | prose — update it to match your pins |
+
+The validation suite enforces the invariants these pins exist for — every
+workflow names a model explicitly and probe/responder runs carry a turn
+cap — but never the specific model names, so your choices validate green.
+Keep the *shape* even if you change every name: cheapest for the probe
+and fully-specified implementation, strongest where judgment concentrates
+(the PR review), and don't under-model judgment work — a wrong design
+costs more than any model tier saves. Template edits require a plugin
+version bump (enforced), and propagation carries them to your fleet;
+after any model change, run the
+[model-transition checklist](docs/OPERATIONS.md#model-transitions) —
+renamed cheaper tiers can leave judgment work under-modeled without
+anything failing loudly.
+
+Per-repo exceptions need no factory machinery: edit that repo's stamped
+workflow directly — `/factory-update` preserves deliberate
+customizations.
+
 ## Repo layout
 
 ```
