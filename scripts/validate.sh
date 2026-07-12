@@ -195,6 +195,19 @@ grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
 ok "CI self-reporting"
 
+# --- Docs map: the navigation layer must stay wired ---
+# Each audience has one entry door; these checks keep the doors linked so
+# a new doc or a rename can't silently orphan part of the map.
+[ -f docs/WORKING.md ] || fail "docs/WORKING.md missing"
+[ -f CONTRIBUTING.md ] || fail "CONTRIBUTING.md missing"
+grep -q 'docs/WORKING.md' README.md || fail "README must link docs/WORKING.md (Where to go)"
+grep -q 'CONTRIBUTING.md' README.md || fail "README must link CONTRIBUTING.md (Where to go)"
+grep -q 'WORKING.md' docs/OPERATIONS.md || fail "OPERATIONS.md must cross-link its WORKING.md pair"
+grep -q 'OPERATIONS.md' docs/WORKING.md || fail "WORKING.md must cross-link its OPERATIONS.md pair"
+grep -q 'evals/cases' CONTRIBUTING.md || fail "CONTRIBUTING must state the eval-case-per-skill rule"
+grep -q 'validate.sh' CONTRIBUTING.md || fail "CONTRIBUTING must require validate.sh before pushing"
+ok "docs map"
+
 # --- Skill evals: unit tests + Tier 2 trigger/routing (deterministic, no tokens) ---
 python3 -m unittest discover -s tests -q || fail "eval runner unit tests failed"
 python3 scripts/run-evals.py || fail "skill evals (tier 2) failed"
