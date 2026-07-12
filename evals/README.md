@@ -63,6 +63,15 @@ evidence in `evals/results/*.debug/`, `total_cost_usd: 0`,
 `terminal_reason: api_error`) from skill failures; do not count them
 against a skill. Re-measure after any grader or model change.
 
+**Hermeticity caveat:** behavioral evals run in the operator's local
+harness, and the environment leaks in — plugins, MCP servers, harness
+tools. The readonly role closes the known escape hatches
+(`--strict-mcp-config`, disallowed Task/ToolSearch — added after an eval
+agent found a local MCP shell tool to route around its denials), but
+default-role results still reflect skill + model + *environment*.
+Compare runs across machines with care; a CI-hermetic runner is future
+work.
+
 **Regression rule:** every *real* routing miss or rule violation observed
 in actual use becomes a case entry — a trigger prompt for a routing miss,
 an expectation (or new eval) for a behavior miss. Authored prompts prove

@@ -245,13 +245,33 @@ def parse_grading(stdout):
 
 READONLY_TOOLS = ["Read", "Glob", "Grep"]
 DEFAULT_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+# An allowlist alone does NOT restrict: acceptEdits auto-approves Edit
+# regardless, and harness tools (EnterWorktree, ...) offer side doors —
+# the first readonly run proved it by committing a "blocked" change. The
+# second run escalated further: the agent used ToolSearch to find a local
+# MCP server's shell-execution tool and spawned a background subagent via
+# Task (which also hung the session). The readonly role therefore runs
+# default permission mode (denials, like the real reviewer), an explicit
+# disallow list for every write/escape surface, and --strict-mcp-config
+# so the operator's local MCP servers never leak into the eval.
+READONLY_DISALLOWED = ["Bash", "Write", "Edit", "NotebookEdit",
+                       "EnterWorktree", "ExitWorktree", "Task", "ToolSearch"]
 
 
-def executor_allowed_tools(ev):
-    """Cross-role evals: role 'readonly' simulates an assess-only agent's
-    allowlist (like the PR reviewer's), so an eval can verify the agent
-    reports its limitation instead of flailing against denials."""
-    return READONLY_TOOLS if ev.get("role") == "readonly" else DEFAULT_TOOLS
+def executor_permission_flags(ev):
+    """Cross-role evals: role 'readonly' simulates an assess-only agent
+    (like the PR reviewer), so an eval can verify the agent reports its
+    limitation instead of flailing against denials."""
+    if ev.get("role") == "readonly":
+        # Lower turn cap: a denial-heavy session burns turns slowly and can
+        # exceed the executor timeout at 30; 12 is enough to read, attempt,
+        # adapt, and conclude.
+        return (["--max-turns", "12", "--strict-mcp-config",
+                 "--allowedTools", *READONLY_TOOLS,
+                 "--disallowedTools", *READONLY_DISALLOWED])
+    return (["--max-turns", "30",
+             "--permission-mode", "acceptEdits",
+             "--allowedTools", *DEFAULT_TOOLS])
 
 
 def stage_skill(name, workspace):
@@ -295,7 +315,7 @@ def save_debug(label, trace, grader):
     return debug_dir
 
 
-def run_behavioral(target, dry_run):
+def run_behavioral(target, dry_run, only=None):
     if shutil.which("claude") is None:
         print("FAIL: behavioral tier needs the `claude` CLI on PATH")
         return 1
@@ -308,6 +328,8 @@ def run_behavioral(target, dry_run):
     failures = 0
     for name, case in selected.items():
         for ev in case.get("evals", []):
+            if only is not None and ev["id"] != only:
+                continue
             label = f"{name}#{ev['id']}"
             if ev.get("trust_level") == "provisional":
                 print(f"note: {label} is provisional (no fixtures) — sanity check, not evidence")
@@ -323,12 +345,19 @@ def run_behavioral(target, dry_run):
             # it permission resolution is environment-dependent — the agent
             # gets denied and narrates instead of acting, which grades as a
             # false skill failure.
-            executor = subprocess.run(
-                ["claude", "-p", ev["prompt"], "--output-format", "stream-json",
-                 "--verbose", "--permission-mode", "acceptEdits", "--max-turns", "30",
-                 "--allowedTools", *executor_allowed_tools(ev)],
-                cwd=workspace, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT,
-            )
+            try:
+                executor = subprocess.run(
+                    ["claude", "-p", ev["prompt"], "--output-format", "stream-json",
+                     "--verbose", *executor_permission_flags(ev)],
+                    cwd=workspace, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT,
+                )
+            except subprocess.TimeoutExpired as exc:
+                debug_dir = save_debug(label, (exc.stdout or b"").decode(errors="replace")
+                                       if isinstance(exc.stdout, bytes) else (exc.stdout or ""), None)
+                print(f"FAIL: {label}: executor timed out after {EXECUTOR_TIMEOUT}s "
+                      f"— partial trace in {debug_dir.relative_to(ROOT)}")
+                failures += 1
+                continue
             trace = executor.stdout
             if executor.returncode != 0:
                 debug_dir = save_debug(label, trace, None)
@@ -366,9 +395,11 @@ def main():
                         help="run Tier-3 behavioral evals (spends tokens)")
     parser.add_argument("--dry-run", action="store_true",
                         help="with --behavioral: print the plan, run nothing")
+    parser.add_argument("--only", type=int, metavar="ID",
+                        help="with --behavioral: run just this eval id")
     args = parser.parse_args()
     if args.behavioral:
-        return run_behavioral(args.behavioral, args.dry_run)
+        return run_behavioral(args.behavioral, args.dry_run, args.only)
     return run_tier2()
 
 

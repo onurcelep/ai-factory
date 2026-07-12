@@ -126,17 +126,26 @@ class TestStageSkill(unittest.TestCase):
         self.assertNotIn("description:", text)
 
 
-class TestExecutorAllowedTools(unittest.TestCase):
-    def test_readonly_role_gets_no_write_tools(self):
-        tools = run_evals.executor_allowed_tools({"role": "readonly"})
-        for forbidden in ("Bash", "Write", "Edit"):
-            self.assertNotIn(forbidden, tools)
-        self.assertIn("Read", tools)
+class TestExecutorPermissionFlags(unittest.TestCase):
+    def test_readonly_role_disallows_every_write_surface(self):
+        flags = run_evals.executor_permission_flags({"role": "readonly"})
+        disallowed = flags[flags.index("--disallowedTools") + 1 :]
+        for tool in ("Bash", "Write", "Edit", "NotebookEdit", "EnterWorktree",
+                     "Task", "ToolSearch"):
+            self.assertIn(tool, disallowed)
+        # the operator's local MCP servers must not leak into the eval
+        self.assertIn("--strict-mcp-config", flags)
+        # acceptEdits would auto-approve Edit despite the allowlist —
+        # readonly must run default permission mode (denials).
+        self.assertNotIn("acceptEdits", flags)
+        allowed = flags[flags.index("--allowedTools") + 1 : flags.index("--disallowedTools")]
+        self.assertIn("Read", allowed)
 
-    def test_default_role_gets_full_toolbox(self):
-        tools = run_evals.executor_allowed_tools({})
-        self.assertIn("Bash", tools)
-        self.assertIn("Write", tools)
+    def test_default_role_gets_full_toolbox_with_acceptedits(self):
+        flags = run_evals.executor_permission_flags({})
+        self.assertIn("acceptEdits", flags)
+        self.assertIn("Bash", flags)
+        self.assertNotIn("--disallowedTools", flags)
 
 
 class TestParseGrading(unittest.TestCase):
