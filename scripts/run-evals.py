@@ -204,6 +204,55 @@ Trace follows on stdin.
 """
 
 
+def parse_grading(stdout):
+    """Extract the grading object from `claude --output-format json` stdout.
+
+    Returns (grading, None) on success or (None, reason). Distinguishes a
+    grader-side error (is_error payload) from malformed output, and tolerates
+    the model fencing or prose-wrapping its JSON.
+    """
+    try:
+        payload = json.loads(stdout)
+    except json.JSONDecodeError:
+        return None, "grader stdout was not JSON"
+    if not isinstance(payload, dict):
+        return None, "grader payload was not an object"
+    if payload.get("is_error"):
+        return None, f"grader errored: {str(payload.get('result'))[:200]}"
+    raw = payload.get("result", "")
+    if isinstance(raw, dict):
+        grading = raw
+    elif isinstance(raw, str):
+        text = raw.strip()
+        if text.startswith("```"):
+            text = re.sub(r"^```[a-zA-Z]*\s*|\s*```$", "", text).strip()
+        try:
+            grading = json.loads(text)
+        except json.JSONDecodeError:
+            match = re.search(r"\{.*\}", text, re.S)
+            if not match:
+                return None, "no JSON object in grader result"
+            try:
+                grading = json.loads(match.group(0))
+            except json.JSONDecodeError:
+                return None, "grader result JSON malformed"
+    else:
+        return None, "grader result missing"
+    if not isinstance(grading, dict) or not isinstance(grading.get("results"), list):
+        return None, "grading missing results[] list"
+    return grading, None
+
+
+def save_debug(label, trace, grader):
+    """Preserve the evidence when a behavioral eval fails abnormally."""
+    debug_dir = RESULTS_DIR / f"{label.replace('#', '-')}.debug"
+    debug_dir.mkdir(parents=True, exist_ok=True)
+    (debug_dir / "trace.jsonl").write_text(trace)
+    (debug_dir / "grader-stdout.txt").write_text(grader.stdout if grader else "")
+    (debug_dir / "grader-stderr.txt").write_text(grader.stderr if grader else "")
+    return debug_dir
+
+
 def run_behavioral(target, dry_run):
     if shutil.which("claude") is None:
         print("FAIL: behavioral tier needs the `claude` CLI on PATH")
@@ -232,6 +281,13 @@ def run_behavioral(target, dry_run):
                 cwd=workspace, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT,
             )
             trace = executor.stdout
+            if executor.returncode != 0:
+                debug_dir = save_debug(label, trace, None)
+                (debug_dir / "executor-stderr.txt").write_text(executor.stderr)
+                print(f"FAIL: {label}: executor exited {executor.returncode} "
+                      f"— evidence in {debug_dir.relative_to(ROOT)}")
+                failures += 1
+                continue
             grader_prompt = GRADER_PROMPT.format(
                 expectations="\n".join(f"- {e}" for e in ev["expectations"])
             )
@@ -239,12 +295,10 @@ def run_behavioral(target, dry_run):
                 ["claude", "-p", grader_prompt, "--output-format", "json"],
                 input=trace, capture_output=True, text=True, timeout=GRADER_TIMEOUT,
             )
-            try:
-                payload = json.loads(grader.stdout)
-                grading = json.loads(payload["result"]) if "result" in payload else payload
-                assert isinstance(grading["results"], list)
-            except (json.JSONDecodeError, KeyError, AssertionError, TypeError):
-                print(f"FAIL: {label}: grader returned non-JSON output")
+            grading, err = parse_grading(grader.stdout)
+            if err:
+                debug_dir = save_debug(label, trace, grader)
+                print(f"FAIL: {label}: {err} — evidence in {debug_dir.relative_to(ROOT)}")
                 failures += 1
                 continue
             out = RESULTS_DIR / f"{name}-{ev['id']}.grading.json"

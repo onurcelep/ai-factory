@@ -1,3 +1,4 @@
+import json
 import sys
 import unittest
 from pathlib import Path
@@ -81,6 +82,48 @@ class TestTier2(unittest.TestCase):
         # The repo's own cases + descriptions must stay green; this is the
         # same gate CI runs via validate.sh.
         self.assertEqual(run_evals.run_tier2(verbose=False), 0)
+
+
+class TestParseGrading(unittest.TestCase):
+    GRADING = {"results": [{"expectation": "x", "pass": True, "evidence": "e"}]}
+
+    def wrap(self, result, is_error=False):
+        return json.dumps({"type": "result", "is_error": is_error, "result": result})
+
+    def test_plain_json_result(self):
+        grading, err = run_evals.parse_grading(self.wrap(json.dumps(self.GRADING)))
+        self.assertIsNone(err)
+        self.assertEqual(grading, self.GRADING)
+
+    def test_fenced_json_result(self):
+        fenced = "```json\n" + json.dumps(self.GRADING) + "\n```"
+        grading, err = run_evals.parse_grading(self.wrap(fenced))
+        self.assertIsNone(err)
+        self.assertEqual(grading, self.GRADING)
+
+    def test_prose_wrapped_json_result(self):
+        wrapped = "Here is the grading:\n" + json.dumps(self.GRADING)
+        grading, err = run_evals.parse_grading(self.wrap(wrapped))
+        self.assertIsNone(err)
+        self.assertEqual(grading, self.GRADING)
+
+    def test_error_payload_reports_grader_error_not_json(self):
+        grading, err = run_evals.parse_grading(
+            self.wrap("API Error: rate limited", is_error=True)
+        )
+        self.assertIsNone(grading)
+        self.assertIn("errored", err)
+        self.assertIn("rate limited", err)
+
+    def test_garbage_stdout_reports_reason(self):
+        grading, err = run_evals.parse_grading("not json at all")
+        self.assertIsNone(grading)
+        self.assertIn("not JSON", err)
+
+    def test_result_without_results_list(self):
+        grading, err = run_evals.parse_grading(self.wrap(json.dumps({"verdict": "ok"})))
+        self.assertIsNone(grading)
+        self.assertIn("results", err)
 
 
 if __name__ == "__main__":
