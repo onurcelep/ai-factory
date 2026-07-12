@@ -1,7 +1,9 @@
 # Operating ai-factory
 
 The one page that answers "what do I run, and when". Written for someone
-who has never seen this system.
+who has never seen this system. This is the *keep it healthy* half of the
+documentation pair; the *use it well* half — daily work inside a stamped
+repo — is [WORKING.md](WORKING.md).
 
 ## The mental model: four channels
 

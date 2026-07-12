@@ -48,6 +48,18 @@ you are forking a working setup with its reasoning attached.
   everything at your own fork
 - Full rationale and alternatives considered: [design spec](docs/superpowers/specs/2026-07-08-ai-factory-design.md)
 
+## Where to go
+
+| You want to… | Read |
+|---|---|
+| Understand what this is and how the pieces fit | This page: [Why](#why) → [How it works](#how-it-works) |
+| Stamp your first repo | [Quick start](#quick-start) + [Prerequisites](#prerequisites) |
+| Work effectively in a stamped repo — which agent surface for which task, the habits that compound | [docs/WORKING.md](docs/WORKING.md) |
+| Maintain the fleet — updates, propagation, versions, cost, rollback | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
+| Fork it and make it your own standard (including billing choices) | [Use it as a base](#use-it-as-a-base) |
+| Change skills or templates — here or in your fork | [CONTRIBUTING.md](CONTRIBUTING.md) + [evals/README.md](evals/README.md) |
+| Check the trust boundaries | [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md) |
+
 ## Quick start
 
 Check the [prerequisites](#prerequisites) first.
@@ -263,30 +275,48 @@ API runs are uncapped and metered (watch them with
 ```
 ai-factory/
 ├── .claude-plugin/marketplace.json     # marketplace "onur"
-├── plugins/factory/
-│   ├── .claude-plugin/plugin.json      # plugin manifest
-│   ├── skills/                         # auto-updating layer
-│   │   ├── factory-init/SKILL.md
-│   │   ├── factory-update/SKILL.md
-│   │   ├── factory-status/SKILL.md     # fleet check: which repos are stale
-│   │   ├── model-routing/SKILL.md
-│   │   ├── release-flow/SKILL.md
-│   │   ├── repo-memory/SKILL.md
-│   │   └── ci-agent-ops/SKILL.md       # CI agent health + incident playbook
-│   └── templates/                      # stamped layer
-│       ├── claude.yml
-│       ├── claude-code-review.yml
-│       ├── settings.json
+├── plugins/factory/                    # everything agents receive
+│   ├── .claude-plugin/plugin.json      # plugin manifest (version = propagation key)
+│   ├── skills/                         # auto-updating layer (7 skills)
+│   │   ├── factory-init/               # stamp a repo
+│   │   ├── factory-update/             # refresh the standard parts
+│   │   ├── factory-status/             # fleet check: which repos are stale
+│   │   ├── model-routing/              # which model tier for which task
+│   │   ├── release-flow/               # branch + PR discipline; agents never merge
+│   │   ├── repo-memory/                # committed agent memory (docs/memory/)
+│   │   └── ci-agent-ops/               # CI agent health + incident playbook
+│   ├── agents/                         # routed subagents: implementer (haiku),
+│   │                                   #   reviewer (sonnet), researcher (opus)
+│   ├── hooks/                          # protect-main: blocks direct pushes to main
+│   └── templates/                      # stamped layer (snapshots, version-gated)
+│       ├── claude.yml                  # @claude issue/PR responder workflow
+│       ├── claude-code-review.yml      # automatic once-per-PR review
+│       ├── claude-smoke-test.yml       # scheduled dead-pipeline probe
+│       ├── settings.json               # plugin wiring for cloud sessions
 │       ├── CLAUDE.md.tmpl              # carries the factory:version stamp
 │       ├── AGENTS.md.tmpl
 │       ├── MEMORY.md.tmpl
 │       └── ci-claude-silent-failures.md  # seeded repo memory
-├── .github/workflows/factory-propagate.yml  # auto-files update issues in stale repos
-├── docs/OPERATIONS.md                  # day-2 ops: channels, onboarding, propagation
-├── docs/superpowers/specs/             # design spec
-├── docs/superpowers/plans/             # implementation plan (historical record)
-├── scripts/validate.sh                 # run after any change here
-└── scripts/rebrand.sh                  # repoint a fork at your own repo
+├── .github/workflows/                  # this repo's own CI
+│   ├── validate.yml                    # full validation suite on every PR
+│   ├── version-guard.yml               # template change ⇒ version bump, enforced
+│   ├── factory-propagate.yml           # files update issues in stale repos
+│   ├── frontier-audit.yml              # weekly best-practices drift check
+│   └── claude-code-review.yml + claude-smoke-test.yml   # dogfooded template copies
+├── evals/                              # skill eval suite (cases + docs)
+├── tests/                              # unit tests + stamping fixtures
+├── docs/
+│   ├── WORKING.md                      # use a stamped repo well (day to day)
+│   ├── OPERATIONS.md                   # keep the fleet healthy (day 2)
+│   ├── SECURITY-MODEL.md               # trust boundaries
+│   └── superpowers/                    # historical build record: specs + plans
+├── scripts/
+│   ├── validate.sh                     # run after any change here
+│   ├── run-evals.py                    # skill evals (tier 2 CI, tier 3 manual)
+│   ├── rebrand.sh                      # repoint a fork at your own repo
+│   ├── cost-report.sh                  # monthly fleet spend from run logs
+│   └── check-version-bump.sh           # the version-guard check, runnable locally
+└── CONTRIBUTING.md                     # the rules validate.sh enforces, explained
 ```
 
 Changing the standard: edit skills or templates, run
