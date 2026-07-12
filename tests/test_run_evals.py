@@ -84,6 +84,48 @@ class TestTier2(unittest.TestCase):
         self.assertEqual(run_evals.run_tier2(verbose=False), 0)
 
 
+class TestMaterializeFixture(unittest.TestCase):
+    def test_writes_files_and_commits_on_main(self):
+        import subprocess
+        import tempfile
+
+        ws = tempfile.mkdtemp(prefix="test-fixture-")
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=ws, check=True)
+        ev = {"files": [{"path": "src/discount.py", "content": "def f():\n    return 1\n"}]}
+        run_evals.materialize_fixture(ev, ws)
+        self.assertEqual(
+            (Path(ws) / "src" / "discount.py").read_text(), "def f():\n    return 1\n"
+        )
+        log = subprocess.run(
+            ["git", "log", "--oneline"], cwd=ws, capture_output=True, text=True
+        )
+        self.assertIn("fixture", log.stdout)
+
+    def test_no_files_makes_no_commit(self):
+        import subprocess
+        import tempfile
+
+        ws = tempfile.mkdtemp(prefix="test-fixture-")
+        subprocess.run(["git", "init", "-q", "-b", "main"], cwd=ws, check=True)
+        run_evals.materialize_fixture({}, ws)
+        log = subprocess.run(
+            ["git", "log", "--oneline"], cwd=ws, capture_output=True, text=True
+        )
+        self.assertEqual(log.stdout, "")
+
+
+class TestStageSkill(unittest.TestCase):
+    def test_workspace_claude_md_carries_skill_body(self):
+        import tempfile
+
+        ws = tempfile.mkdtemp(prefix="test-stage-")
+        run_evals.stage_skill("release-flow", ws)
+        text = (Path(ws) / "CLAUDE.md").read_text()
+        self.assertIn("release-flow", text)
+        # frontmatter must not leak into the staged instructions
+        self.assertNotIn("description:", text)
+
+
 class TestParseGrading(unittest.TestCase):
     GRADING = {"results": [{"expectation": "x", "pass": True, "evidence": "e"}]}
 

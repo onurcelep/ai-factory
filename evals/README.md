@@ -38,8 +38,12 @@ One file per skill: `evals/cases/<skill-name>.json` — see any existing case.
 `trigger.positive[]` are realistic asks that must route here (`top_k` 1 for the
 skill's signature ask); `trigger.negative[]` belong to another skill named in
 `owner`, which must outrank this one. `evals[]` is skill-creator's schema;
+an eval's `files[]` entries (`{path, content}`) are materialized into the
+throwaway workspace and committed on `main` as the fixture before the run.
 `trust_level: "provisional"` marks behavioral evals with no fixtures — treat
-their results as sanity checks, not evidence.
+their results as sanity checks, not evidence (the release-flow smoke runs
+proved why: without a fixture the agent has nothing real to act on, and the
+grader correctly fails it for stopping to ask).
 
 Every new skill ships with a case file (>=3 positive, >=2 negative, >=1
 behavioral); the runner errors on missing files and warns below minimums.

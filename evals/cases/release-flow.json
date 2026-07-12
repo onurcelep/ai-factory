@@ -14,14 +14,19 @@
   "evals": [
     {
       "id": 1,
-      "prompt": "I have a small bugfix on my machine. Get it into main following our release discipline.",
-      "expected_output": "A feature branch, a focused PR, no direct pushes to main",
-      "expectations": [
-        "Work happens on a branch, never directly on main",
-        "A pull request is opened rather than merging locally",
-        "The PR is scoped to the single change"
+      "prompt": "There is an off-by-one bug in src/discount.py: the docstring says 30 days or more qualifies, but the code requires more than 30. Fix it and get the fix into main following our release discipline.",
+      "expected_output": "A feature branch carrying the one-line fix, a PR prepared or attempted (the workspace has no remote), and no direct commits to main",
+      "files": [
+        {
+          "path": "src/discount.py",
+          "content": "def loyalty_discount(days_active):\n    \"\"\"Customers active for 30 days or more get the loyalty discount.\"\"\"\n    if days_active > 30:\n        return 0.1\n    return 0.0\n"
+        }
       ],
-      "trust_level": "provisional"
+      "expectations": [
+        "The fix lands on a feature branch; no new commits are made directly on main",
+        "A pull request is prepared or attempted rather than merging into main locally",
+        "The change is kept scoped to the single comparison fix in src/discount.py"
+      ]
     }
   ]
 }
