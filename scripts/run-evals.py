@@ -243,6 +243,17 @@ def parse_grading(stdout):
     return grading, None
 
 
+READONLY_TOOLS = ["Read", "Glob", "Grep"]
+DEFAULT_TOOLS = ["Bash", "Read", "Write", "Edit", "Glob", "Grep"]
+
+
+def executor_allowed_tools(ev):
+    """Cross-role evals: role 'readonly' simulates an assess-only agent's
+    allowlist (like the PR reviewer's), so an eval can verify the agent
+    reports its limitation instead of flailing against denials."""
+    return READONLY_TOOLS if ev.get("role") == "readonly" else DEFAULT_TOOLS
+
+
 def stage_skill(name, workspace):
     """Write the skill under test into the workspace's CLAUDE.md.
 
@@ -315,7 +326,7 @@ def run_behavioral(target, dry_run):
             executor = subprocess.run(
                 ["claude", "-p", ev["prompt"], "--output-format", "stream-json",
                  "--verbose", "--permission-mode", "acceptEdits", "--max-turns", "30",
-                 "--allowedTools", "Bash", "Read", "Write", "Edit", "Glob", "Grep"],
+                 "--allowedTools", *executor_allowed_tools(ev)],
                 cwd=workspace, capture_output=True, text=True, timeout=EXECUTOR_TIMEOUT,
             )
             trace = executor.stdout

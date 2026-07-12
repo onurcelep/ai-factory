@@ -47,3 +47,24 @@ grader correctly fails it for stopping to ask).
 
 Every new skill ships with a case file (>=3 positive, >=2 negative, >=1
 behavioral); the runner errors on missing files and warns below minimums.
+
+An eval may declare `"role": "readonly"` — the executor then runs with an
+assess-only allowlist (Read/Glob/Grep, like the PR reviewer's posture)
+instead of the full toolbox. Use it to test the role contract
+(docs/SECURITY-MODEL.md): given a change-shaped task it cannot perform,
+the agent must report its limitation, not flail against denials.
+
+## Trust and upkeep
+
+**Stability baseline** (2026-07-12, release-flow#1, fixtured): 4/4 graded
+runs passed across separate invocations. Two additional attempts hit
+subscription usage limits — the runner distinguishes those (executor exit,
+evidence in `evals/results/*.debug/`, `total_cost_usd: 0`,
+`terminal_reason: api_error`) from skill failures; do not count them
+against a skill. Re-measure after any grader or model change.
+
+**Regression rule:** every *real* routing miss or rule violation observed
+in actual use becomes a case entry — a trigger prompt for a routing miss,
+an expectation (or new eval) for a behavior miss. Authored prompts prove
+the descriptions match our guesses; accumulated real misses are what make
+the suite ground truth.

@@ -202,6 +202,22 @@ grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
 ok "CI self-reporting"
 
+# --- Role contracts: instructions × permissions must reconcile ---
+# Incident 2026-07-12: a change-agent gate in CLAUDE.md sent the read-only
+# reviewer into 56 permission denials and it posted no review under a green
+# check. Instructions that command actions must scope themselves by role,
+# and load-bearing allowlists must stay scoped (docs/SECURITY-MODEL.md
+# "Role contracts").
+grep -q 'Scope by role' CLAUDE.md || fail "CLAUDE.md must scope its gates by agent role (read-only agents cannot run them)"
+grep -q 'Role contracts' docs/SECURITY-MODEL.md || fail "SECURITY-MODEL.md must document the role contracts"
+FA=.github/workflows/frontier-audit.yml
+grep -q -- '--allowedTools' "$FA" || fail "frontier-audit must pin a scoped --allowedTools (load-bearing: SECURITY-MODEL.md)"
+if grep -o -- '--allowedTools [^ ]*' "$FA" | tr ' ,' '\n\n' | grep -qx 'Bash'; then
+  fail "frontier-audit must not allow bare Bash (WebFetch + push rights job)"
+fi
+grep -q '"role": "readonly"' evals/cases/release-flow.json || fail "cross-role behavioral eval missing (release-flow role: readonly)"
+ok "role contracts"
+
 # --- Docs map: the navigation layer must stay wired ---
 # Each audience has one entry door; these checks keep the doors linked so
 # a new doc or a rename can't silently orphan part of the map.
