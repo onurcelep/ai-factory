@@ -24,7 +24,7 @@ unchanged on any rebranded fork.
 | Bump the plugin version **only** when `plugins/factory/templates/**` changes | The version drives fleet propagation; a doc- or skill-only bump files pointless update PRs in every repo | `version-guard` workflow + `scripts/check-version-bump.sh` |
 | Workflows in `.github/workflows/` that share a basename with a template stay **byte-identical** to it | This repo dogfoods its own templates; drift here means shipping something untested | validate.sh (re-sync: `cp plugins/factory/templates/<name> .github/workflows/<name>`) |
 | No owner/marketplace literals in functional code or checks | Forks must validate green after `rebrand.sh` with zero patches | validate.sh derives names from the manifests |
-| Auth is either `CLAUDE_CODE_OAUTH_TOKEN` (subscription, shipped default) or `ANTHROPIC_API_KEY` (API-billing forks) | See [README § Billing](README.md#billing-subscription-or-api-key) | validate.sh accepts either |
+| Auth is either `CLAUDE_CODE_OAUTH_TOKEN` (subscription, shipped default) or `ANTHROPIC_API_KEY` (API-billing forks) | See [FORKING.md § Billing](docs/FORKING.md#billing-subscription-or-api-key) | validate.sh accepts either |
 
 ## Changing skills vs. changing templates
 

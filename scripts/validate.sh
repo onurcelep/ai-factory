@@ -50,10 +50,11 @@ grep -q "\"factory@$MKT\": true" "$T/settings.json" || fail "settings.json must 
 grep -qF '<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing begin marker"
 grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing end marker"
 # Either credential is valid: CLAUDE_CODE_OAUTH_TOKEN (subscription, the
-# shipped default) or ANTHROPIC_API_KEY (API-billing forks) — see README
-# "Billing: subscription or API key".
+# shipped default) or ANTHROPIC_API_KEY (API-billing forks) — see
+# docs/FORKING.md "Billing: subscription or API key".
 grep -qE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' "$T/claude.yml" || fail "claude.yml must wire an auth secret (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)"
-# Models are a fork-class choice (README "Choosing your models"): the suite
+# Models are a fork-class choice (docs/FORKING.md "Choosing your models"):
+# the suite
 # enforces the incident-earned invariants — every workflow pins a model
 # explicitly and probe/responder runs are turn-capped — never the author's
 # specific model names, so a fork can reroute models without patching this.
@@ -153,7 +154,7 @@ ok "skills channel pin/rollback story"
 
 # --- Security model doc + cost report ---
 [ -f docs/SECURITY-MODEL.md ] || fail "docs/SECURITY-MODEL.md missing"
-grep -q 'SECURITY-MODEL.md' README.md || fail "README must link docs/SECURITY-MODEL.md from the decisions table"
+grep -q 'SECURITY-MODEL.md' docs/DECISIONS.md || fail "decisions table must link SECURITY-MODEL.md"
 [ -f scripts/cost-report.sh ] || fail "scripts/cost-report.sh missing"
 bash -n scripts/cost-report.sh || fail "scripts/cost-report.sh has a syntax error"
 grep -q 'total_cost_usd' scripts/cost-report.sh || fail "cost-report.sh must extract total_cost_usd"
@@ -168,8 +169,9 @@ for a in factory-implementer factory-reviewer factory-researcher; do
   grep -q '^description: ' "$f" || fail "$f missing description field"
   grep -q '^model: ' "$f" || fail "$f missing model pin (the whole point)"
 done
-# Which tier each agent pins is a fork-class choice (README "Choosing your
-# models"); the loop above already enforces that every agent pins one.
+# Which tier each agent pins is a fork-class choice (docs/FORKING.md
+# "Choosing your models"); the loop above already enforces that every agent
+# pins one.
 grep -q 'factory-implementer' plugins/factory/skills/model-routing/SKILL.md || fail "model-routing skill must reference the shipped agents"
 ok "plugin agents (routing pins)"
 
@@ -185,9 +187,9 @@ ok "plugin hooks (protect-main)"
 # --- Round-2 wiring: sticky review comment, init canary, decisions rows ---
 grep -q 'use_sticky_comment: true' plugins/factory/templates/claude-code-review.yml || fail "review template must use a sticky comment"
 grep -q 'Init canary' .github/prompts/frontier-audit.md || fail "frontier-audit prompt must carry the init canary"
-grep -q 'claude-smoke-test' README.md || fail "README decisions must cover the smoke test"
-grep -q 'factory_stamp.py' README.md || fail "README decisions must cover the golden tests"
-grep -q 'version-guard' README.md || fail "README decisions must cover the version guard"
+grep -q 'claude-smoke-test' docs/DECISIONS.md || fail "decisions table must cover the smoke test"
+grep -q 'factory_stamp.py' docs/DECISIONS.md || fail "decisions table must cover the golden tests"
+grep -q 'version-guard' docs/DECISIONS.md || fail "decisions table must cover the version guard"
 ok "round-2 wiring (sticky review, canary, decisions rows)"
 
 # --- CI self-reporting: failing runs explain themselves ---
@@ -205,8 +207,16 @@ ok "CI self-reporting"
 # a new doc or a rename can't silently orphan part of the map.
 [ -f docs/WORKING.md ] || fail "docs/WORKING.md missing"
 [ -f CONTRIBUTING.md ] || fail "CONTRIBUTING.md missing"
-grep -q 'docs/WORKING.md' README.md || fail "README must link docs/WORKING.md (Where to go)"
+# No orphan docs: every top-level doc must be reachable from the hub's
+# "Where to go" table — a new or renamed doc that isn't wired in fails here.
+for d in docs/*.md; do
+  grep -qF "$d" README.md || fail "README 'Where to go' must link $d (no orphan docs)"
+done
 grep -q 'CONTRIBUTING.md' README.md || fail "README must link CONTRIBUTING.md (Where to go)"
+# Agent entry point: the repo's own CLAUDE.md orients agents working here.
+[ -f CLAUDE.md ] || fail "CLAUDE.md (agent entry point) missing"
+grep -q 'validate.sh' CLAUDE.md || fail "CLAUDE.md must point agents at validate.sh"
+grep -q 'CONTRIBUTING.md' CLAUDE.md || fail "CLAUDE.md must point agents at CONTRIBUTING.md"
 grep -q 'WORKING.md' docs/OPERATIONS.md || fail "OPERATIONS.md must cross-link its WORKING.md pair"
 grep -q 'OPERATIONS.md' docs/WORKING.md || fail "WORKING.md must cross-link its OPERATIONS.md pair"
 grep -q 'evals/cases' CONTRIBUTING.md || fail "CONTRIBUTING must state the eval-case-per-skill rule"

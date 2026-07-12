@@ -8,61 +8,43 @@ how drift happens.
 
 ## Why
 
-If you're new to working with AI coding agents, here is what a stamped
-repo actually gets you, in plain terms:
+A stamped repo gets you, in plain terms:
 
-- **An AI teammate you assign work through GitHub.** Open an issue
-  describing a change and tag `@claude`: an agent reads your repo, makes
-  the change on a branch, and hands you a pull request. You review and
-  merge; it can never touch `main` directly.
+- **An AI teammate you assign work through GitHub** — open an issue, tag
+  `@claude`, review the PR it hands back. It can never touch `main`.
 - **Every pull request reviewed automatically** by a strong model before
-  you look at it — bugs and project-rule violations flagged once per PR,
-  with no reviewer to schedule.
-- **Agents that know your project.** Local Claude Code sessions, cloud
-  sessions, and the GitHub agents all follow the same committed rules
-  (`CLAUDE.md`) and share the same committed memory (`docs/memory/`) —
-  knowledge survives across sessions, machines, and agent types.
-- **A setup that maintains itself.** This is ~10 files of configuration
-  per repo (workflows, permissions, model pins, settings wiring,
-  conventions) that people hand-copy, get subtly wrong, and never update.
-  Here it is one command to stamp, one command to audit
-  (`/factory-status`), and — with propagation enabled — updates arrive in
-  every repo as ready-to-merge PRs.
+  you look at it.
+- **Agents that know your project** — local, cloud, and CI sessions all
+  follow the same committed rules (`CLAUDE.md`) and share the same
+  committed memory (`docs/memory/`).
+- **A setup that maintains itself** — one command to stamp, one to audit,
+  and updates arrive fleet-wide as ready-to-merge PRs.
 
-None of the mechanism is secret sauce: it composes official Claude Code
-features (the GitHub Action, plugins, skills, CLAUDE.md). Plenty of
-public templates wire up something similar. What this repo adds is that
-it is a **maintained, opinionated, tested implementation**: every default
-was chosen for a reason you can read (the [decisions](#the-decisions)
-table and the [design spec](docs/superpowers/specs/2026-07-08-ai-factory-design.md)),
-the choices are battle-tested on the author's own repos first, a
-validation suite guards the whole thing — including [evals](evals/README.md)
-that test the skills themselves — and `rebrand.sh` turns a fork
-into *your* standard in one command. You are not adopting a framework;
-you are forking a working setup with its reasoning attached.
+None of the mechanism is secret sauce — it composes official Claude Code
+features. What this repo adds is a **maintained, opinionated, tested
+implementation**: every default has a written reason
+([docs/DECISIONS.md](docs/DECISIONS.md)), the skills are guarded by their
+own [eval suite](evals/README.md), and `rebrand.sh` turns a fork into
+*your* standard in one command. You are not adopting a framework; you are
+forking a working setup with its reasoning attached.
 
-- Marketplace **`onur`** · plugin **`factory`**
-- Public on purpose: remote marketplace fetches need no token, and nothing
-  here ever contains a secret
-- Fork-friendly: [`scripts/rebrand.sh`](#use-it-as-a-base) repoints
-  everything at your own fork
-- Full rationale and alternatives considered: [design spec](docs/superpowers/specs/2026-07-08-ai-factory-design.md)
+Marketplace **`onur`** · plugin **`factory`** · public on purpose (remote
+marketplace fetches need no token; nothing here ever contains a secret).
 
 ## Where to go
 
 | You want to… | Read |
 |---|---|
-| Understand what this is and how the pieces fit | This page: [Why](#why) → [How it works](#how-it-works) |
 | Stamp your first repo | [Quick start](#quick-start) + [Prerequisites](#prerequisites) |
+| Understand how the pieces fit | [How it works](#how-it-works), below |
 | Work effectively in a stamped repo — which agent surface for which task, the habits that compound | [docs/WORKING.md](docs/WORKING.md) |
 | Maintain the fleet — updates, propagation, versions, cost, rollback | [docs/OPERATIONS.md](docs/OPERATIONS.md) |
-| Fork it and make it your own standard (including billing choices) | [Use it as a base](#use-it-as-a-base) |
+| Fork it — rebrand, process layer, billing, model choices | [docs/FORKING.md](docs/FORKING.md) |
+| See every default and its reason | [docs/DECISIONS.md](docs/DECISIONS.md) |
 | Change skills or templates — here or in your fork | [CONTRIBUTING.md](CONTRIBUTING.md) + [evals/README.md](evals/README.md) |
 | Check the trust boundaries | [docs/SECURITY-MODEL.md](docs/SECURITY-MODEL.md) |
 
 ## Quick start
-
-Check the [prerequisites](#prerequisites) first.
 
 ```bash
 # one-time, per machine
@@ -74,22 +56,17 @@ cd my-project && git init
 claude  →  /factory-init      # stamps everything, prints the manual steps
 
 # after templates change in ai-factory
-claude  →  /factory-update    # inside each consuming repo — or enable
-                              # auto-propagation and never run it by hand
+claude  →  /factory-update    # per repo — or enable auto-propagation
 claude  →  /factory-status    # fleet check: which repos are stale
 ```
 
-Day-2 operations — the four update channels, onboarding an existing repo,
-and one-time setup for **automatic propagation** (template changes file
-@claude update issues in every stale repo for you): see
-[docs/OPERATIONS.md](docs/OPERATIONS.md).
-
-`/factory-init` stamps the two `@claude` workflows, `.claude/settings.json`
+`/factory-init` stamps the `@claude` workflows, `.claude/settings.json`
 plugin wiring, a marker-fenced `CLAUDE.md`, `AGENTS.md`, and a
-`docs/memory/` index — then prints the two steps it cannot do for you:
-install the [Claude GitHub App](https://github.com/apps/claude) and
-`gh secret set CLAUDE_CODE_OAUTH_TOKEN`. It is idempotent and never
-overwrites existing content silently.
+`docs/memory/` index — then prints the two steps it cannot do for you
+(install the [Claude GitHub App](https://github.com/apps/claude), set the
+auth secret). It is idempotent and never overwrites existing content
+silently. Day-2 operations live in
+[docs/OPERATIONS.md](docs/OPERATIONS.md).
 
 ## Prerequisites
 
@@ -99,7 +76,7 @@ for anything missing — reading ahead just saves the round trip.
 | Requirement | Why | Verify |
 |---|---|---|
 | [Claude Code](https://claude.com/claude-code) CLI, logged in | runs the skills; installs the plugins at session start | `claude --version` |
-| A Claude subscription able to mint an OAuth token — or an Anthropic API key, see [billing](#billing-subscription-or-api-key) | the `@claude` workflows authenticate with the `CLAUDE_CODE_OAUTH_TOKEN` secret (API-key forks: `ANTHROPIC_API_KEY`) | `claude setup-token` |
+| A Claude subscription able to mint an OAuth token — or an API key, see [billing](docs/FORKING.md#billing-subscription-or-api-key) | the `@claude` workflows authenticate with the `CLAUDE_CODE_OAUTH_TOKEN` secret (API-key forks: `ANTHROPIC_API_KEY`) | `claude setup-token` |
 | `git` + a GitHub-hosted target repo | the workflows are GitHub Actions; the marketplace is fetched from GitHub | `git remote -v` |
 | `gh` CLI, authenticated | `/factory-init`'s preflight and `gh secret set` | `gh auth status` |
 | Claude GitHub App installed on the target repo or org | lets the Actions react to `@claude` mentions and PRs | https://github.com/apps/claude |
@@ -115,8 +92,8 @@ Two layers with different update semantics:
 | Stamped files — workflows, `.claude/settings.json`, `CLAUDE.md`, `AGENTS.md`, `docs/memory/MEMORY.md` | `plugins/factory/templates/` | **snapshot** — frozen per repo until you run `/factory-update` there |
 
 CLAUDE.md is the contract between the two: `/factory-update` rewrites only
-the marker-fenced standard block, and the `## Project` section — the repo's
-own rules and hard-won knowledge — is never touched.
+the marker-fenced standard block, and the `## Project` section — the
+repo's own rules and hard-won knowledge — is never touched.
 
 Config reaches each environment by a different road, because remote agents
 never see `~/.claude` and the `@claude` Action additionally **strips the
@@ -145,215 +122,27 @@ flowchart TD
     CM --- GHA
 ```
 
-- Locally, a one-time `claude plugin install factory@onur` may be needed —
-  `enabledPlugins` alone does not always surface a plugin.
-- `superpowers` (the default process-skills plugin, swappable — see
-  [Use it as a base](#use-it-as-a-base)) loads local + cloud only; the
-  turn-capped Action responder has no use for it and skips it deliberately.
-
-## The skills are tested, not assumed
-
-Skills are prose instructions, and prose regresses silently: a description
-drifts away from the words users actually say and stops triggering, or an
-agent finds a rationalization the wording never closed — all under green
-checks. So the skills carry their own [three-tier eval suite](evals/README.md):
-
-| Tier | Question it answers | Runs |
-|---|---|---|
-| Structural | Are the files well-formed and consistent? | CI, free |
-| Trigger & routing | Do realistic asks reach the right skill, and do the seven skills stay distinct? | CI, free (`scripts/run-evals.py`) |
-| Behavioral | Does an agent *following* the skill actually behave as promised? | on demand, spends tokens (`--behavioral`) |
-
-This earned its place on day one: the first trigger run caught two skills
-whose descriptions lacked the vocabulary of their own signature asks, and
-the first behavioral run caught an agent performing a local `git merge`
-into `main` *with the release-flow rule loaded* — the rule forbade pushes
-but had never closed the local-merge loophole. Both are fixed and now
-regression-guarded.
-
-For consumers of stamped repos nothing changes. For this repo (and forks)
-one rule is new: **every skill ships with an eval case**
-(`evals/cases/<name>.json`); the runner errors on missing files. The suite
-doubles as the model-transition harness — after a model or harness change,
-run Tier 2 plus a targeted behavioral pass and you get a regression report
-instead of a fleet surprise
-([OPERATIONS.md § Model transitions](docs/OPERATIONS.md#model-transitions)).
-
-## The decisions
-
-What a repository signs up for when it adopts ai-factory. Each row is a
-deliberate decision; the linked skill or template is its source of truth.
-
-| Decision | Lives in |
-|---|---|
-| Two GitHub workflows per repo: an interactive `@claude` responder (Sonnet, turn-capped) and an automatic once-per-PR review (Opus). Models are always pinned explicitly — an omitted model silently inherits an expensive default. | `templates/claude*.yml` |
-| Model routing by task: Haiku for fully-specified implementer tasks, Sonnet for judgment/fix/responder work, Opus for research, design, and the PR review. Escalate one level on repeated failure, never by default. | `model-routing` skill |
-| Release discipline: local work gates on `/code-review` before any push that reaches users; the remote `@claude` agent works on `claude/` branches and hands you a PR — `main` itself is guarded by a require-PR ruleset stamped at init (the workflows carry the write permissions the Action needs to push branches; the ruleset, not the token, is what protects `main`). | `release-flow` skill + `factory-init` step 5 |
-| CLAUDE.md is layered: a marker-fenced standard block owned by `/factory-update`, and a `## Project` section owned by the repo forever — updates can never destroy repo-specific knowledge. | `templates/CLAUDE.md.tmpl` |
-| Agent memory is committed to the repo (`docs/memory/`: index + one fact per file), so local, cloud, and Action sessions share the same knowledge with zero machine state. | `repo-memory` skill |
-| Plugin wiring is redundant by design: `.claude/settings.json` covers local and cloud sessions; the workflows self-load the plugin for Action runs, which strip `settings.json`. | `templates/settings.json` + workflows |
-| The process layer is a swappable default, not a hard dependency: the shipped template enables `superpowers` for local and cloud sessions only (intentionally not loaded into Action runs — context cost, no benefit for a turn-capped responder), but the validator requires only `factory@<marketplace>`. Drop or replace it by editing one line in the template (see [Use it as a base](#use-it-as-a-base)). | `templates/settings.json` |
-| One secret per consumer repo (`CLAUDE_CODE_OAUTH_TOKEN`); this repo stays public and never carries secrets. | `/factory-init` checklist |
-| Trust boundaries for the write-capable agents are written down where they live: per workflow, who can trigger it, what it runs with, its injection surfaces, and the named mitigation holding each risk (actor checks, the `main` ruleset, human-only merge, workflow-file push refusal, scoped `--allowedTools`). | [`docs/SECURITY-MODEL.md`](docs/SECURITY-MODEL.md) |
-| `AGENTS.md` is a thin cross-tool pointer to CLAUDE.md, nothing more. | `templates/AGENTS.md.tmpl` |
-| Silent failures are detected AND self-reported: a weekly smoke test per repo plus post-run assertions in both workflows turn the dead-token signature (green check, no work) red at the first affected run — and every failure explains itself where the operator already is (a marked comment on the PR/issue naming the cause; a filed "CI health" issue for scheduled smoke failures). Nobody reads run logs to learn what the machine knew. | `templates/claude-smoke-test.yml` + assertion steps in `templates/claude*.yml` |
-| The stamping semantics are executable truth: a deterministic reference implementation, golden-file fixtures, and idempotency/boundary invariants run in the validation suite — a skill-prose edit that changes behavior fails before it ships. | `scripts/lib/factory_stamp.py` + `scripts/test-stamping.sh` |
-| Template changes cannot ship without a version bump (the propagation trigger): a CI guard compares the diff against the merge base, and staleness comparisons are version-aware, so repos ahead of the marketplace are never "downgraded". | `.github/workflows/version-guard.yml` + `scripts/check-version-bump.sh` |
-| Trust boundaries are written down where they live, and fleet spend is observable on demand (terminal-only, never committed or scheduled — Actions logs on public repos are public). | `docs/SECURITY-MODEL.md` + `scripts/cost-report.sh` |
-| Model routing is structural, not just prose: the plugin ships routed agents (`factory-implementer`/Haiku, `factory-reviewer`/Sonnet, `factory-researcher`/Opus) that carry the policy's pins and escalation rule. | `plugins/factory/agents/` |
-| "Nobody pushes `main`" is mechanical in local sessions too: a plugin hook blocks direct pushes to main/master in stamped repos (escape hatch: `FACTORY_ALLOW_MAIN_PUSH=1`), covering the private-repos-without-rulesets gap. | `plugins/factory/hooks/` |
-| The action's input surface was swept deliberately (2026-07): adopted `use_sticky_comment` (one updating review comment per PR) and an explicit floating-`opus` rationale; rejected `track_progress` (tag mode already posts tracking comments) and `use_commit_signing` (no verification requirement yet); workload identity federation is tracked as a future decision (see the issue tracker). | `templates/claude-code-review.yml` comments |
-| Skills auto-propagate from `main` with no version gate; the pin/rollback story is a fleet-wide **revert-on-`main` runbook** plus a per-environment convergence table, and an **opt-in per-repo `extraKnownMarketplaces` `ref`/`sha` pin** that stabilizes local + cloud sessions only. A moving `stable`-tag channel was rejected: `claude-code-action`'s `plugin_marketplaces` input accepts only a bare `.git` URL, so CI cannot honor a pinned ref and a tag would protect just half the fleet. | `docs/OPERATIONS.md` (rollback + convergence) |
-
-## Use it as a base
-
-Everything functional is owner-agnostic except two strings — the GitHub
-repo slug and the marketplace name — and one script rewrites both:
-
-```bash
-gh repo fork onurcelep/ai-factory --clone    # or "Use this template" on GitHub
-cd ai-factory
-./scripts/rebrand.sh <your-github-user>/ai-factory    # optional 2nd arg: marketplace name
-```
-
-The script rewrites the manifests, templates, and README, then re-runs the
-validation suite (which checks cross-file consistency, not owner literals,
-so it passes for any fork). Review the diff, optionally put your own name
-in the two manifests' owner/author fields, push — then continue from
-[Quick start](#quick-start) with your own slug. Keep the fork public and
-secret-free; from there the skills and templates are yours to edit.
-
-The process layer is a default, not a requirement. To drop it, delete the
-`"superpowers@claude-plugins-official": true` line from
-`plugins/factory/templates/settings.json` — and the comma that ended the
-line above it, now the last entry (JSON forbids a trailing comma); to swap
-it, replace that line in place with your own plugin's
-`"<plugin>@<marketplace>": true` (and add its marketplace under
-`extraKnownMarketplaces`). The validator only requires
-`factory@<marketplace>`, so it stays green either way.
-
-### Billing: subscription or API key
-
-This repo's default is **subscription billing**: workflow runs authenticate
-with an OAuth token minted from the operator's Claude subscription
-(`claude setup-token` → `gh secret set CLAUDE_CODE_OAUTH_TOKEN`), so agent
-runs draw from the plan you already pay for. That is the author's setup and
-the one every template, diagnostic string, and playbook is written around.
-
-A fork can run on **API billing** (metered per token) instead — the
-underlying `claude-code-action` accepts either credential. What to change,
-once, in your fork's templates:
-
-1. In `plugins/factory/templates/claude*.yml` (all three workflows),
-   replace the credential line:
-
-   ```yaml
-   # subscription (shipped default)
-   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-   # API billing
-   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
-   ```
-
-2. Also update the **silent-failure diagnostic messages** in those
-   templates — they tell the operator to suspect and rotate
-   `CLAUDE_CODE_OAUTH_TOKEN` by name, and a playbook that names the wrong
-   secret is worse than none. Search each template for the string and
-   reword to your secret.
-3. Set the secret per repo (`gh secret set ANTHROPIC_API_KEY`) or once at
-   org level, bump the plugin version, and let propagation (or
-   `/factory-update`) carry it to your fleet.
-
-The validation suite accepts either secret name, so a converted fork stays
-green without patching the suite. Mixed fleets also work — the credential
-is chosen per repo by whatever the stamped workflow names. The trade-off is
-purely commercial: subscription runs are capped by your plan's limits;
-API runs are uncapped and metered (watch them with
-`scripts/cost-report.sh`).
-
-### Choosing your models
-
-Model choice is a fork decision, not a config option: every model is
-pinned explicitly *where it runs*, so rerouting is a one-time edit in
-your fork rather than indirection the workflows resolve at runtime. The
-complete list of pin locations:
-
-| What | Where the pin lives | Shipped default |
-|---|---|---|
-| `@claude` issue/PR responder | `plugins/factory/templates/claude.yml` → `claude_args: '--model … --max-turns …'` | Sonnet, turn-capped |
-| Automatic PR review | `plugins/factory/templates/claude-code-review.yml` → `claude_args` | Opus (once per PR, depth pays) |
-| Scheduled smoke probe | `plugins/factory/templates/claude-smoke-test.yml` → `claude_args` | Haiku (a liveness check needs no depth) |
-| Routed subagents | `plugins/factory/agents/factory-{implementer,reviewer,researcher}.md` → `model:` frontmatter | haiku / sonnet / opus |
-| The routing *policy* (when to use which) | `plugins/factory/skills/model-routing/SKILL.md` | prose — update it to match your pins |
-
-The validation suite enforces the invariants these pins exist for — every
-workflow names a model explicitly and probe/responder runs carry a turn
-cap — but never the specific model names, so your choices validate green.
-Keep the *shape* even if you change every name: cheapest for the probe
-and fully-specified implementation, strongest where judgment concentrates
-(the PR review), and don't under-model judgment work — a wrong design
-costs more than any model tier saves. Template edits require a plugin
-version bump (enforced), and propagation carries them to your fleet;
-after any model change, run the
-[model-transition checklist](docs/OPERATIONS.md#model-transitions) —
-renamed cheaper tiers can leave judgment work under-modeled without
-anything failing loudly.
-
-Per-repo exceptions need no factory machinery: edit that repo's stamped
-workflow directly — `/factory-update` preserves deliberate
-customizations.
+The skills themselves are tested, not assumed: trigger/routing evals gate
+every PR, and behavioral evals verify that an agent *following* a skill
+actually behaves as promised — details in
+[evals/README.md](evals/README.md).
 
 ## Repo layout
 
 ```
 ai-factory/
-├── .claude-plugin/marketplace.json     # marketplace "onur"
-├── plugins/factory/                    # everything agents receive
-│   ├── .claude-plugin/plugin.json      # plugin manifest (version = propagation key)
-│   ├── skills/                         # auto-updating layer (7 skills)
-│   │   ├── factory-init/               # stamp a repo
-│   │   ├── factory-update/             # refresh the standard parts
-│   │   ├── factory-status/             # fleet check: which repos are stale
-│   │   ├── model-routing/              # which model tier for which task
-│   │   ├── release-flow/               # branch + PR discipline; agents never merge
-│   │   ├── repo-memory/                # committed agent memory (docs/memory/)
-│   │   └── ci-agent-ops/               # CI agent health + incident playbook
-│   ├── agents/                         # routed subagents: implementer (haiku),
-│   │                                   #   reviewer (sonnet), researcher (opus)
-│   ├── hooks/                          # protect-main: blocks direct pushes to main
-│   └── templates/                      # stamped layer (snapshots, version-gated)
-│       ├── claude.yml                  # @claude issue/PR responder workflow
-│       ├── claude-code-review.yml      # automatic once-per-PR review
-│       ├── claude-smoke-test.yml       # scheduled dead-pipeline probe
-│       ├── settings.json               # plugin wiring for cloud sessions
-│       ├── CLAUDE.md.tmpl              # carries the factory:version stamp
-│       ├── AGENTS.md.tmpl
-│       ├── MEMORY.md.tmpl
-│       └── ci-claude-silent-failures.md  # seeded repo memory
-├── .github/workflows/                  # this repo's own CI
-│   ├── validate.yml                    # full validation suite on every PR
-│   ├── version-guard.yml               # template change ⇒ version bump, enforced
-│   ├── factory-propagate.yml           # files update issues in stale repos
-│   ├── frontier-audit.yml              # weekly best-practices drift check
-│   └── claude-code-review.yml + claude-smoke-test.yml   # dogfooded template copies
-├── evals/                              # skill eval suite (cases + docs)
-├── tests/                              # unit tests + stamping fixtures
-├── docs/
-│   ├── WORKING.md                      # use a stamped repo well (day to day)
-│   ├── OPERATIONS.md                   # keep the fleet healthy (day 2)
-│   ├── SECURITY-MODEL.md               # trust boundaries
-│   └── superpowers/                    # historical build record: specs + plans
-├── scripts/
-│   ├── validate.sh                     # run after any change here
-│   ├── run-evals.py                    # skill evals (tier 2 CI, tier 3 manual)
-│   ├── rebrand.sh                      # repoint a fork at your own repo
-│   ├── cost-report.sh                  # monthly fleet spend from run logs
-│   └── check-version-bump.sh           # the version-guard check, runnable locally
-└── CONTRIBUTING.md                     # the rules validate.sh enforces, explained
+├── plugins/factory/        # everything agents receive: skills (auto-updating),
+│                           #   templates (version-gated snapshots), routed
+│                           #   agents, protect-main hook
+├── evals/                  # skill eval suite — cases + docs
+├── tests/                  # unit tests + stamping fixtures
+├── docs/                   # one doc per question — see "Where to go" above
+├── scripts/                # validate.sh, run-evals.py, rebrand.sh, cost-report.sh
+├── .github/workflows/      # this repo's CI: validate, version-guard,
+│                           #   propagation, frontier audit, dogfooded templates
+├── CLAUDE.md               # agent entry point for working on this repo
+└── CONTRIBUTING.md         # the rules validate.sh enforces, explained
 ```
 
-Changing the standard: edit skills or templates, run
-`./scripts/validate.sh` (must print `ALL CHECKS PASSED`), push. Skill
-edits are live everywhere at the next session start; template edits reach
-each repo when you run `/factory-update` there — or automatically as
-@claude-authored update PRs if propagation is enabled
-([docs/OPERATIONS.md](docs/OPERATIONS.md)).
+Changing the standard — which layer to touch, what must pass, when to
+bump the version: [CONTRIBUTING.md](CONTRIBUTING.md).

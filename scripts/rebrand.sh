@@ -30,7 +30,8 @@ for f in .claude-plugin/marketplace.json \
          plugins/factory/templates/settings.json \
          plugins/factory/templates/claude.yml \
          plugins/factory/templates/claude-code-review.yml \
-         README.md; do
+         README.md \
+         docs/FORKING.md; do
   sed -i.bak \
     -e "s|$OLD_SLUG|$NEW_SLUG|g" \
     -e "s|factory@$OLD_MKT|factory@$NEW_MKT|g" \
