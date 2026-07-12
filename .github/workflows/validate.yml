@@ -1,0 +1,16 @@
+# Validation suite for every PR and push to main. Deterministic and free:
+# runs Tier 1 (structural) and Tier 2 (trigger/routing) skill evals plus the
+# template/manifest checks. Tier 3 (behavioral, token-spending) is manual:
+#   python3 scripts/run-evals.py --behavioral <skill>
+name: validate
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash scripts/validate.sh

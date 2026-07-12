@@ -192,4 +192,9 @@ grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
 ok "CI self-reporting"
 
+# --- Skill evals: unit tests + Tier 2 trigger/routing (deterministic, no tokens) ---
+python3 -m unittest discover -s tests -q || fail "eval runner unit tests failed"
+python3 scripts/run-evals.py || fail "skill evals (tier 2) failed"
+ok "skill evals (tier 2)"
+
 echo "ALL CHECKS PASSED"
