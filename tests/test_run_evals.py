@@ -59,5 +59,29 @@ class TestLexicalEngine(unittest.TestCase):
         self.assertIn("factory init", skills["factory-init"].lower())
 
 
+class TestTier2(unittest.TestCase):
+    def test_check_collisions_flags_near_duplicates(self):
+        docs = {
+            "alpha": run_evals.tokenize("stamp the repository with standard workflows and settings"),
+            "beta": run_evals.tokenize("stamp the repository with standard workflows and wiring"),
+            "gamma": run_evals.tokenize("prune the garden and water the seeds"),
+        }
+        vecs, _, _ = run_evals.build_vectors(docs)
+        pairs = run_evals.check_collisions(vecs)
+        names = {frozenset((a, b)) for a, b, _ in pairs}
+        self.assertIn(frozenset(("alpha", "beta")), names)
+        self.assertNotIn(frozenset(("alpha", "gamma")), names)
+
+    def test_load_cases_returns_case_per_file(self):
+        cases = run_evals.load_cases()
+        for name, case in cases.items():
+            self.assertEqual(case["skill_name"], name)
+
+    def test_run_tier2_passes_on_current_repo(self):
+        # The repo's own cases + descriptions must stay green; this is the
+        # same gate CI runs via validate.sh.
+        self.assertEqual(run_evals.run_tier2(verbose=False), 0)
+
+
 if __name__ == "__main__":
     unittest.main()
