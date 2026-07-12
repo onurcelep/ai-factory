@@ -165,6 +165,31 @@ Never judge an @claude run by the green check — see the
 diagnosis order, and the smoke-test procedure. Seeded per repo as
 `docs/memory/ci-claude-silent-failures.md`.
 
+## Model transitions
+
+When the model behind your agents changes — a new family ships, your plan's
+top tier changes, or a workflow's pinned model is deprecated — skill behavior
+can regress silently: the files didn't change, so nothing looks different
+until an agent quietly stops following its process. Run this checklist the
+day a transition happens:
+
+1. **Tier 2 first** (free): `python3 scripts/run-evals.py`. Routing is
+   model-independent, so this confirms the catalog itself is still coherent
+   before you spend tokens.
+2. **Targeted Tier 3** (tokens): `python3 scripts/run-evals.py --behavioral
+   <skill>` for the skills whose failure is expensive — the CI-facing ones
+   first (`release-flow`, `ci-agent-ops`). A new-model regression here means
+   the skill's wording leaned on the old model's judgment: tighten the
+   instructions until it passes, don't wait for a fleet incident.
+3. **Re-check model pins.** Workflow templates pin models by name
+   (`claude.yml`, `claude-code-review.yml`); agent definitions pin tiers.
+   Deprecated names fail loudly, but a *renamed cheaper tier* can leave
+   judgment work under-modeled — review pins against the `model-routing`
+   skill's policy, bump the plugin version, and let propagation carry the
+   fix to the fleet.
+4. **Smoke the CI agent** per `factory:ci-agent-ops` — a model swap in the
+   Action is exactly the kind of change its silent-failure modes love.
+
 ## Rolling back a bad skill, and pinning against one
 
 Skills auto-propagate from `main` with no version gate (the skills row of
