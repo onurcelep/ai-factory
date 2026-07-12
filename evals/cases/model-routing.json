@@ -1,0 +1,27 @@
+{
+  "skill_name": "model-routing",
+  "trigger": {
+    "positive": [
+      { "prompt": "Which model should this subagent run on?", "top_k": 1 },
+      { "prompt": "Pick a cost-efficient model tier for the PR review workflow", "top_k": 2 },
+      { "prompt": "Should the implementer agents be haiku or sonnet here?", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Branch off and open a pull request for this change", "owner": "release-flow" },
+      { "prompt": "Record this durable learning where future agents will see it", "owner": "repo-memory" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "I'm about to spawn several subagents for a refactor: some mechanical renames, one deep design question. Assign models.",
+      "expected_output": "Cheap tier for the mechanical work, capable tier only for the design question, with every dispatch pinning a model explicitly",
+      "expectations": [
+        "Mechanical tasks are routed to the cheapest capable tier",
+        "Judgment-heavy work is not under-modeled",
+        "Every agent dispatch sets a model explicitly instead of inheriting the session model"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}

@@ -1,6 +1,6 @@
 ---
 name: ci-agent-ops
-description: Operating and diagnosing the @claude CI pipeline. Use when a @claude run or auto PR review misbehaves (no PR, no review note, instant finish), when verifying CI-agent health, or before changing claude*.yml workflows or the CLAUDE_CODE_OAUTH_TOKEN secret.
+description: Operating and diagnosing the @claude CI pipeline. Use when a @claude workflow run or auto PR review misbehaves (green check but no PR opened, no review note, instant finish, silent failure), when verifying CI-agent health, or before changing claude*.yml workflows or the CLAUDE_CODE_OAUTH_TOKEN secret.
 ---
 
 # CI agent ops

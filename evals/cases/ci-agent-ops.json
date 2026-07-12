@@ -1,0 +1,27 @@
+{
+  "skill_name": "ci-agent-ops",
+  "trigger": {
+    "positive": [
+      { "prompt": "The @claude run went green but produced no PR", "top_k": 1 },
+      { "prompt": "The automatic review never commented on my pull request", "top_k": 2 },
+      { "prompt": "Verify the CI agent is actually alive before I rotate its token", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Which of my repositories are on stale factory versions?", "owner": "factory-status" },
+      { "prompt": "Route the review workflow to a cheaper model tier", "owner": "model-routing" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "My @claude issue run finished in seconds with a green check and did nothing. Diagnose it.",
+      "expected_output": "A diagnosis that checks the run's actual output for silent failure (is_error, zero cost) starting from the auth token, not from the workflow YAML",
+      "expectations": [
+        "The OAuth token / auth path is checked first",
+        "The run's execution log is inspected for is_error or zero-cost markers rather than trusting the green check",
+        "The diagnosis distinguishes silent auth failure from a genuinely empty task"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}

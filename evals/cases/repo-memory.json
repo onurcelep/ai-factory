@@ -1,0 +1,27 @@
+{
+  "skill_name": "repo-memory",
+  "trigger": {
+    "positive": [
+      { "prompt": "Where do I record this project learning so future agents see it?", "top_k": 1 },
+      { "prompt": "Promote this local auto-memory fact into the repo", "top_k": 2 },
+      { "prompt": "Save what we learned about the build system as durable committed memory", "top_k": 2 }
+    ],
+    "negative": [
+      { "prompt": "Wire this repo up with the standard workflows and settings", "owner": "factory-init" },
+      { "prompt": "What branch discipline applies before I merge this?", "owner": "release-flow" }
+    ]
+  },
+  "evals": [
+    {
+      "id": 1,
+      "prompt": "We just learned the staging deploy needs a manual cache flush every time. Make sure no future session loses this.",
+      "expected_output": "A fact file under docs/memory/ plus an index line, committed to the repo",
+      "expectations": [
+        "The fact is written under docs/memory/, not into a local-only store",
+        "The memory index is updated to point at the new fact file",
+        "The fact records why, not just what"
+      ],
+      "trust_level": "provisional"
+    }
+  ]
+}
