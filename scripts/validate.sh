@@ -53,8 +53,13 @@ grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.
 # shipped default) or ANTHROPIC_API_KEY (API-billing forks) — see README
 # "Billing: subscription or API key".
 grep -qE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' "$T/claude.yml" || fail "claude.yml must wire an auth secret (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)"
-grep -q 'claude-sonnet-5 --max-turns 40' "$T/claude.yml" || fail "claude.yml must pin sonnet turn-capped"
-grep -q 'model opus' "$T/claude-code-review.yml" || fail "review workflow must pin opus"
+# Models are a fork-class choice (README "Choosing your models"): the suite
+# enforces the incident-earned invariants — every workflow pins a model
+# explicitly and probe/responder runs are turn-capped — never the author's
+# specific model names, so a fork can reroute models without patching this.
+grep -qE -- '--model [^ '"'"']+' "$T/claude.yml" || fail "claude.yml must pin a model explicitly (--model ...)"
+grep -qE -- '--max-turns [0-9]+' "$T/claude.yml" || fail "claude.yml must carry a turn cap (--max-turns N)"
+grep -qE -- '--model [^ '"'"']+' "$T/claude-code-review.yml" || fail "review workflow must pin a model explicitly (--model ...)"
 grep -q 'cancel-in-progress: true' "$T/claude-code-review.yml" || fail "review workflow must cancel superseded runs"
 grep -q 'docs/memory' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl standard block must point at docs/memory"
 grep -q 'factory:version {{FACTORY_VERSION}}' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl must carry the version stamp placeholder"
@@ -64,7 +69,8 @@ grep -q 'factory:ci-agent-ops' "$T/ci-claude-silent-failures.md" || fail "seeded
 # Silent-failure detection (issue #17): a scheduled smoke test + post-run
 # assertions on the dead-on-arrival signature. Both the scheduled probe and
 # the assertion steps parse the action's documented `execution_file` output.
-grep -q 'claude-haiku' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must pin the cheapest capable model (haiku)"
+grep -qE -- '--model [^ '"'"']+' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must pin a model explicitly (--model ...)"
+grep -qE -- '--max-turns [0-9]+' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must carry a turn cap (--max-turns N)"
 grep -q 'cron:' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must run on a schedule (off-minute cron)"
 grep -q 'cancel-in-progress: true' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must use a concurrency group"
 grep -q 'execution_file' "$T/claude-smoke-test.yml" || fail "smoke-test workflow must assert on the action's execution_file output"
@@ -162,9 +168,8 @@ for a in factory-implementer factory-reviewer factory-researcher; do
   grep -q '^description: ' "$f" || fail "$f missing description field"
   grep -q '^model: ' "$f" || fail "$f missing model pin (the whole point)"
 done
-grep -q '^model: haiku' plugins/factory/agents/factory-implementer.md || fail "implementer must pin haiku"
-grep -q '^model: sonnet' plugins/factory/agents/factory-reviewer.md || fail "reviewer must pin sonnet"
-grep -q '^model: opus' plugins/factory/agents/factory-researcher.md || fail "researcher must pin opus"
+# Which tier each agent pins is a fork-class choice (README "Choosing your
+# models"); the loop above already enforces that every agent pins one.
 grep -q 'factory-implementer' plugins/factory/skills/model-routing/SKILL.md || fail "model-routing skill must reference the shipped agents"
 ok "plugin agents (routing pins)"
 
