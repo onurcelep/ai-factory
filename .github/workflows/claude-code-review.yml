@@ -70,6 +70,7 @@ jobs:
             Additionally: if this change clearly reflects a non-obvious, reusable learning by the factory:repo-memory skill's criteria (an environment quirk, a hard-won gotcha, a cross-component contract — not anything derivable from the code or git history) and the PR neither adds nor updates a docs/memory/ fact, report that as a finding. Routine changes must not be flagged.
 
       - name: Assert the review was not a silent failure
+        id: assert
         # A bad CLAUDE_CODE_OAUTH_TOKEN makes claude-code-action exit 0 (green
         # check) while doing nothing: the execution log's final result message
         # reads is_error:true / num_turns:1 / total_cost_usd:0, and the PR gets
@@ -145,13 +146,16 @@ jobs:
           # on any of the three surfaces (excluding this step's own
           # self-report comment).
           DENIALS=$(jq -r '.permission_denials_count // 0' <<<"$RESULT")
+          echo "high_denials=$([ "${DENIALS:-0}" -gt 20 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
+          # Exact bot login (-F -x): a substring match would false-positive on
+          # any user with "claude" in the name and silently rot if it did.
           ARTIFACTS=$(
             {
               gh api "repos/${GITHUB_REPOSITORY}/issues/${PR_NUMBER}/comments" --paginate \
                 --jq '.[] | select((.body | startswith("<!-- factory:ci-self-report -->")) | not) | .user.login' 2>/dev/null
               gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/comments" --paginate --jq '.[].user.login' 2>/dev/null
               gh api "repos/${GITHUB_REPOSITORY}/pulls/${PR_NUMBER}/reviews" --paginate --jq '.[].user.login' 2>/dev/null
-            } | grep -ci 'claude' || true
+            } | grep -Fcxi 'claude[bot]' || true
           )
           if [ "${ARTIFACTS:-0}" -eq 0 ]; then
             report "**Review ran but posted nothing** (num_turns=$NUM_TURNS, cost=$COST, permission_denials=$DENIALS). A review with no posted comment is unverifiable — treat this PR as not reviewed. A high denial count means the agent was blocked from acting (check the workflow's --allowedTools against what CLAUDE.md tells agents to do); retry by pushing a new commit."
@@ -160,3 +164,18 @@ jobs:
           fi
           [ "${DENIALS:-0}" -le 20 ] || echo "::warning::High permission-denial count ($DENIALS): the review agent was repeatedly blocked — check --allowedTools vs the instructions it was given."
           echo "Health + artifact assertions passed (artifacts=$ARTIFACTS, denials=$DENIALS)."
+
+      - name: Preserve execution log when evidence is needed
+        # The execution trace is the only record of WHICH tool calls were
+        # denied — without it, incident diagnosis is archaeology. But on
+        # public repos, run artifacts are publicly downloadable, so healthy
+        # runs' traces are not published: upload only when the assertion
+        # failed or the denial count was high (the two cases where the trace
+        # is the evidence).
+        if: ${{ !cancelled() && (steps.assert.outcome == 'failure' || steps.assert.outputs.high_denials == 'true') }}
+        uses: actions/upload-artifact@v4
+        with:
+          name: claude-review-execution-${{ github.run_id }}
+          path: ${{ steps.claude-review.outputs.execution_file }}
+          retention-days: 14
+          if-no-files-found: ignore
