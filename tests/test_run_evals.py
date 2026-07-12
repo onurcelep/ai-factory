@@ -126,6 +126,19 @@ class TestStageSkill(unittest.TestCase):
         self.assertNotIn("description:", text)
 
 
+class TestExecutorAllowedTools(unittest.TestCase):
+    def test_readonly_role_gets_no_write_tools(self):
+        tools = run_evals.executor_allowed_tools({"role": "readonly"})
+        for forbidden in ("Bash", "Write", "Edit"):
+            self.assertNotIn(forbidden, tools)
+        self.assertIn("Read", tools)
+
+    def test_default_role_gets_full_toolbox(self):
+        tools = run_evals.executor_allowed_tools({})
+        self.assertIn("Bash", tools)
+        self.assertIn("Write", tools)
+
+
 class TestParseGrading(unittest.TestCase):
     GRADING = {"results": [{"expectation": "x", "pass": True, "evidence": "e"}]}
 

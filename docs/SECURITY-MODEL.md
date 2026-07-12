@@ -73,6 +73,45 @@ the value there.
 | **Injection surfaces** | **The highest-risk combination in the fleet: `WebSearch` + `WebFetch` (fetching arbitrary external pages — a classic prompt-injection channel) together with push rights.** It also reads the full repo history (`fetch-depth: 0`). |
 | **Mitigation holding each risk** | **Bounded capability: the scoped `--allowedTools` pin** in the `claude_args` block — `Bash` is restricted to `git`, `gh`, the repo's own validator, and harmless utilities (no arbitrary shell), so a page that tries to inject "run this command" has no general `Bash` to reach. **`main` is still protected by the ruleset** and **merge is still human-only** (invariants 1 & 2), so even a fully injected audit run can at most push a branch that a human then declines to merge. **No untrusted-text trigger:** unlike the responder, nothing an outside party writes can *start* this run. |
 
+## Role contracts: instructions × permissions
+
+Instructions and permissions are delivered by two different systems.
+Instructions broadcast widely — the repo `CLAUDE.md` and the plugin's
+skills load into *every* agent that works here. Permissions are
+role-specific — each workflow's `permissions:` block and `--allowedTools`
+pin (the tables above). A mismatch between the two is invisible until it
+becomes an incident: the agent obeys an instruction its allowlist cannot
+honor, gets denied, and burns turns flailing or fails its actual job.
+
+This is not hypothetical. On 2026-07-12 the PR reviewer obeyed a
+root-CLAUDE.md gate written for change-making agents ("run the validation
+suite before pushing"), was permission-denied 56 times, and posted **no
+review at all under a green check** — caught only by the artifact
+assertion added the same day (see the review workflow's assert step and
+issue #42).
+
+The contract rules, in force:
+
+1. **Instructions that command actions must name the roles they bind.**
+   The root `CLAUDE.md` scopes its gates to change-making agents and
+   tells read-only roles to assess instead of attempt. Any future
+   instruction file that names a gate follows the same pattern
+   (enforced by `validate.sh`).
+2. **A role's allowlist is part of its trust boundary, not a
+   convenience setting.** Widening one to satisfy an instruction is a
+   security decision — argue it against the tables above, not against a
+   denial count. (The reviewer currently runs on the action's default
+   tool policy; an explicit pin is deliberately deferred until issue #42
+   yields evidence of what a review legitimately needs.)
+3. **Denials are the mismatch signal.** The review workflow warns when
+   the denial count exceeds 20 and preserves the execution trace as a
+   run artifact on failure or high denials, so "what did the agent try
+   vs. what was it allowed" is a download, not archaeology.
+4. **The contract is tested from the agent's side too:** a cross-role
+   behavioral eval (`evals/cases/release-flow.json`, `role: readonly`)
+   runs an agent with an assess-only allowlist against a change-shaped
+   task and requires it to report its limitation instead of flailing.
+
 ## Invariant 3: GitHub refuses workflow-file self-modification
 
 Independent of the tokens above, GitHub rejects any push that modifies
