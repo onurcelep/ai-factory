@@ -49,7 +49,10 @@ grep -q "\"factory@$MKT\": true" "$T/settings.json" || fail "settings.json must 
 # so a fork can drop or swap the process layer without patching this suite.
 grep -qF '<!-- factory:standard:begin (managed by /factory-update — do not hand-edit) -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing begin marker"
 grep -qF '<!-- factory:standard:end -->' "$T/CLAUDE.md.tmpl" || fail "CLAUDE.md.tmpl missing end marker"
-grep -q 'CLAUDE_CODE_OAUTH_TOKEN' "$T/claude.yml" || fail "claude.yml must use CLAUDE_CODE_OAUTH_TOKEN"
+# Either credential is valid: CLAUDE_CODE_OAUTH_TOKEN (subscription, the
+# shipped default) or ANTHROPIC_API_KEY (API-billing forks) — see README
+# "Billing: subscription or API key".
+grep -qE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' "$T/claude.yml" || fail "claude.yml must wire an auth secret (CLAUDE_CODE_OAUTH_TOKEN or ANTHROPIC_API_KEY)"
 grep -q 'claude-sonnet-5 --max-turns 40' "$T/claude.yml" || fail "claude.yml must pin sonnet turn-capped"
 grep -q 'model opus' "$T/claude-code-review.yml" || fail "review workflow must pin opus"
 grep -q 'cancel-in-progress: true' "$T/claude-code-review.yml" || fail "review workflow must cancel superseded runs"
@@ -74,7 +77,7 @@ ok "templates"
 FI=plugins/factory/skills/factory-init/SKILL.md
 [ -f "$FI" ] || fail "$FI missing"
 grep -q 'CLAUDE_PLUGIN_ROOT' "$FI" || fail "factory-init must reference CLAUDE_PLUGIN_ROOT templates"
-grep -q 'CLAUDE_CODE_OAUTH_TOKEN' "$FI" || fail "factory-init must mention the auth secret"
+grep -qE 'CLAUDE_CODE_OAUTH_TOKEN|ANTHROPIC_API_KEY' "$FI" || fail "factory-init must mention the auth secret"
 grep -qF 'factory:standard:begin' "$FI" || fail "factory-init must document the markers"
 ok "factory-init skill"
 

@@ -87,7 +87,7 @@ for anything missing — reading ahead just saves the round trip.
 | Requirement | Why | Verify |
 |---|---|---|
 | [Claude Code](https://claude.com/claude-code) CLI, logged in | runs the skills; installs the plugins at session start | `claude --version` |
-| A Claude subscription able to mint an OAuth token | the `@claude` workflows authenticate with the `CLAUDE_CODE_OAUTH_TOKEN` secret | `claude setup-token` |
+| A Claude subscription able to mint an OAuth token — or an Anthropic API key, see [billing](#billing-subscription-or-api-key) | the `@claude` workflows authenticate with the `CLAUDE_CODE_OAUTH_TOKEN` secret (API-key forks: `ANTHROPIC_API_KEY`) | `claude setup-token` |
 | `git` + a GitHub-hosted target repo | the workflows are GitHub Actions; the marketplace is fetched from GitHub | `git remote -v` |
 | `gh` CLI, authenticated | `/factory-init`'s preflight and `gh secret set` | `gh auth status` |
 | Claude GitHub App installed on the target repo or org | lets the Actions react to `@claude` mentions and PRs | https://github.com/apps/claude |
@@ -219,6 +219,44 @@ it, replace that line in place with your own plugin's
 `"<plugin>@<marketplace>": true` (and add its marketplace under
 `extraKnownMarketplaces`). The validator only requires
 `factory@<marketplace>`, so it stays green either way.
+
+### Billing: subscription or API key
+
+This repo's default is **subscription billing**: workflow runs authenticate
+with an OAuth token minted from the operator's Claude subscription
+(`claude setup-token` → `gh secret set CLAUDE_CODE_OAUTH_TOKEN`), so agent
+runs draw from the plan you already pay for. That is the author's setup and
+the one every template, diagnostic string, and playbook is written around.
+
+A fork can run on **API billing** (metered per token) instead — the
+underlying `claude-code-action` accepts either credential. What to change,
+once, in your fork's templates:
+
+1. In `plugins/factory/templates/claude*.yml` (all three workflows),
+   replace the credential line:
+
+   ```yaml
+   # subscription (shipped default)
+   claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+   # API billing
+   anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+   ```
+
+2. Also update the **silent-failure diagnostic messages** in those
+   templates — they tell the operator to suspect and rotate
+   `CLAUDE_CODE_OAUTH_TOKEN` by name, and a playbook that names the wrong
+   secret is worse than none. Search each template for the string and
+   reword to your secret.
+3. Set the secret per repo (`gh secret set ANTHROPIC_API_KEY`) or once at
+   org level, bump the plugin version, and let propagation (or
+   `/factory-update`) carry it to your fleet.
+
+The validation suite accepts either secret name, so a converted fork stays
+green without patching the suite. Mixed fleets also work — the credential
+is chosen per repo by whatever the stamped workflow names. The trade-off is
+purely commercial: subscription runs are capped by your plan's limits;
+API runs are uncapped and metered (watch them with
+`scripts/cost-report.sh`).
 
 ## Repo layout
 
