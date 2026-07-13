@@ -59,13 +59,24 @@ This tool will never modify content outside the marker boundaries.
 
 ## 2. Refresh workflows and settings
 
-**Action-session limitation:** GitHub rejects pushes from the @claude
-App token that create or modify files under `.github/workflows/`
-("refusing to allow a GitHub App to ... without workflows permission").
-If the template diff touches only workflow files' comments or content:
-apply everything else, revert the workflow-file changes, and report the
-exact remaining diff for a human (or a local session) to apply. Do not
-burn turns retrying the push.
+**Action-session limitation — read this before touching any
+`.github/workflows/**` path.** The @claude App token cannot write there
+at all (GitHub rejects the push, and the action's own tool policy
+matches that boundary), so treat every file under `.github/workflows/`
+as **read-only in this session, full stop**: never call `Edit` or
+`Write` on one, and do not "try it and see" — a denied write attempt is
+turns spent for nothing, and a run that keeps retrying instead of
+backing off can burn its whole turn budget and error out
+(`error_max_turns`) without ever reaching the CLAUDE.md version-stamp
+update, which is the one change that actually clears a propagation
+issue. Instead: `Read` the current file and the template, diff them
+yourself (textually, in your head or a scratch comparison — no write
+tool involved), and if they differ, put the exact diff in your report
+for a human (or a local session, which has no such restriction) to
+apply by hand. This applies even if the diff is just a comment or
+whitespace change — do not special-case "small" diffs into an attempt.
+Do the CLAUDE.md and settings.json work below regardless of whether a
+workflow diff exists; they are independent and unblocked.
 
 Templates below refer to the source resolved in step 0.
 
