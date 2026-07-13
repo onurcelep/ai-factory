@@ -44,16 +44,16 @@ the value there.
 | **Trigger surface** | Issue/comment/review text containing `@claude` (see the `on:` + `if:` block). On a **public** repo, anyone can *open* an issue — so the text is attacker-controllable. |
 | **Token + effective permissions** | Runs the workflow's `GITHUB_TOKEN`; scopes pinned in the `permissions:` block of `templates/claude.yml` (includes `contents: write`). Model authenticates with the `CLAUDE_CODE_OAUTH_TOKEN` secret. Do not restate the scopes here — read the block. |
 | **Injection surfaces** | The triggering issue/comment/PR body (untrusted on public repos); repository file contents the agent reads. |
-| **Mitigation holding each risk** | **Who can actually run it: claude-code-action actor checks** — the action only proceeds for a triggering user with **write access** to the repo, and **rejects bots by default** unless allowlisted (see [Mitigations](#mitigations-what-each-one-is)). So an anonymous public commenter's `@claude` never starts a privileged run. **What a run can do to `main`: the require-PR ruleset** (invariant 1). **Irreversible action: human-only merge** (invariant 2). **Self-modification: GitHub's workflow-file push refusal** (invariant 3 below). |
+| **Mitigation holding each risk** | **Who can actually run it: claude-code-action actor checks** — the action only proceeds for a triggering user with **write access** to the repo, and **rejects bots by default** unless allowlisted (see [Mitigations](#mitigations-what-each-one-is)). So an anonymous public commenter's `@claude` never starts a privileged run. **Who can spend *your* token: the `CLAUDE_TRUSTED_ACTORS` gate** (below) — write access and token-spend are different trust decisions; this workflow's `if:` additionally requires the actor be the repo owner or on that allowlist. **What a run can do to `main`: the require-PR ruleset** (invariant 1). **Irreversible action: human-only merge** (invariant 2). **Self-modification: GitHub's workflow-file push refusal** (invariant 3 below). |
 
 ### 2. Review — `templates/claude-code-review.yml` (automatic Opus review)
 
 | Facet | Detail |
 |---|---|
-| **Trigger surface** | Every `pull_request` event (`opened`/`synchronize`/`ready_for_review`/`reopened`) — see the `on:` block. |
+| **Trigger surface** | Every `pull_request` event (`opened`/`synchronize`/`ready_for_review`/`reopened`) — see the `on:` block. Unlike the responder, there is no `@claude` text gate at all upstream of the actor check below: any PR fires it. |
 | **Token + effective permissions** | Near-read-only: the `permissions:` block in `templates/claude-code-review.yml` grants no `contents` write — this job cannot push. `pull-requests: write` exists solely for the assertion step's self-report comment (PR comments require this scope, not `issues: write` — verified via a live 403); it adds no capability class the job lacks (the app token already posts the review comment). Read the block for the exact scopes. |
 | **Injection surfaces** | The PR diff and PR/issue metadata it reviews — untrusted, since a machine-authored PR is exactly the case this reviews. |
-| **Mitigation holding each risk** | **Bot-authored PRs still get reviewed: the `allowed_bots: 'claude'` allowlist** — the action rejects non-human actors by default, so the responder's own `claude`-authored proposals are explicitly allowlisted so they are *not* skipped. The blast radius is bounded structurally: **no contents write** means even a fully injected review agent cannot push; the only write surface is comment posting, which the app token already had. |
+| **Mitigation holding each risk** | **Who can spend *your* token: the job-level `CLAUDE_TRUSTED_ACTORS` gate** (below) — since this workflow has no actor check upstream (it isn't the `claude-code-action` responder gate, it's a plain `pull_request` trigger), the `if:` on the job itself requires the PR author be the repo owner, on the allowlist, or `claude[bot]`. **Bot-authored PRs still get reviewed: the `allowed_bots: 'claude'` action input** — the action separately rejects non-human actors by default, so the responder's own `claude`-authored proposals are explicitly allowlisted so they are *not* skipped by the action itself (the job-level gate above allowlists the same login so the two don't fight). The blast radius is bounded structurally: **no contents write** means even a fully injected review agent cannot push; the only write surface is comment posting, which the app token already had. |
 
 ### 3. Propagate — `.github/workflows/factory-propagate.yml` (fleet fan-out)
 
@@ -72,6 +72,48 @@ the value there.
 | **Token + effective permissions** | Workflow `GITHUB_TOKEN` with the scopes in its `permissions:` block (includes `contents: write` to push the audit branch); model via `CLAUDE_CODE_OAUTH_TOKEN`. Read the block for the scopes. |
 | **Injection surfaces** | **The highest-risk combination in the fleet: `WebSearch` + `WebFetch` (fetching arbitrary external pages — a classic prompt-injection channel) together with push rights.** It also reads the full repo history (`fetch-depth: 0`). |
 | **Mitigation holding each risk** | **Bounded capability: the scoped `--allowedTools` pin** in the `claude_args` block — `Bash` is restricted to `git`, `gh`, the repo's own validator, and harmless utilities (no arbitrary shell), so a page that tries to inject "run this command" has no general `Bash` to reach. **`main` is still protected by the ruleset** and **merge is still human-only** (invariants 1 & 2), so even a fully injected audit run can at most push a branch that a human then declines to merge. **No untrusted-text trigger:** unlike the responder, nothing an outside party writes can *start* this run. |
+
+## The `CLAUDE_TRUSTED_ACTORS` gate: write access ≠ token spend
+
+GitHub write access and "may run agents on the repo owner's
+`CLAUDE_CODE_OAUTH_TOKEN`" are two different trust decisions. A solo
+maintainer never notices the gap — they're the only write-access actor
+there is — but the moment a repo gains an outside collaborator with write
+access, `claude-code-action`'s own actor check (write-access required) is
+no longer narrow enough: that collaborator's `@claude` comment, or their
+plain PR against the review workflow, would run against *your*
+subscription token, not theirs.
+
+Both `templates/claude.yml` and `templates/claude-code-review.yml` add a
+job-level `if:` on top of the action's own check:
+
+```
+github.actor == github.event.repository.owner.login ||
+contains(format(',{0},', vars.CLAUDE_TRUSTED_ACTORS), format(',{0},', github.actor))
+```
+
+(the review workflow checks `github.event.pull_request.user.login`
+instead of `github.actor`, since the actor triggering a `pull_request`
+event is GitHub itself, not the PR's author — and separately allowlists
+`claude[bot]` so machine-authored PRs are not the case that widening
+`CLAUDE_TRUSTED_ACTORS` is meant to guard against).
+
+- **The repo owner is always trusted, with zero config** — `github.event.repository.owner.login`
+  is read from the event, never hardcoded, so this holds unchanged across
+  forks and rebranding.
+- **Extending trust to a contributor is an explicit, auditable step**, not
+  a side effect of granting them write access:
+  ```bash
+  gh variable set CLAUDE_TRUSTED_ACTORS --body "alice,bob"
+  ```
+  Unset (the default), no one but the owner can trigger a token-spending
+  run — a contributor can still push branches and open PRs, the PR just
+  doesn't get an automatic review, and their `@claude` mentions are
+  silently ignored (no model call, no cost — the gate is evaluated in the
+  `if:` before the action even starts).
+- **Comma-delimited membership, not substring match** — the
+  `format(',{0},', …)` wrapping means `bob` in the list never
+  accidentally matches actor `bobby`.
 
 ## Role contracts: instructions × permissions
 
@@ -144,6 +186,10 @@ everything *except* workflow-file changes — see `docs/OPERATIONS.md`.)
   see also the `factory:ci-agent-ops` skill.
 - **Scoped `--allowedTools`** — the frontier-audit `claude_args` pin bounds
   the audit agent's `Bash` surface.
+- **`CLAUDE_TRUSTED_ACTORS` gate** — the job-level `if:` on the responder
+  and review workflows (see above) that narrows "may trigger a run" to
+  the repo owner plus an explicit allowlist, independent of GitHub write
+  access.
 
 ## If you fork and weaken a mitigation
 
@@ -157,3 +203,4 @@ what you are giving up:
 | Widen frontier-audit `--allowedTools` (e.g. bare `Bash`) | The bound on the highest-injection-risk job — a fetched page can now propose arbitrary commands. |
 | Give the workflow/App token `workflow` scope | Invariant 3 — agents can rewrite their own triggers and permissions. |
 | Merge PRs by bot/automation instead of a human | Invariant 2 — the one human checkpoint on irreversible change. |
+| Set `CLAUDE_TRUSTED_ACTORS` to `*`, or drop the job-level `if:` gate | Every write-access collaborator can spend the repo owner's `CLAUDE_CODE_OAUTH_TOKEN` — the gap this mitigation exists to close. |

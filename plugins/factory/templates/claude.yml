@@ -12,11 +12,25 @@ on:
 
 jobs:
   claude:
+    # Trust boundary for this actor gate: docs/SECURITY-MODEL.md (responder
+    # row). The action's own actor check (write access required) is the
+    # floor; this is a ceiling BELOW it, deliberately narrower than what
+    # GitHub write access alone would allow, because granting a
+    # collaborator write access is a different decision from letting them
+    # spend the repo owner's CLAUDE_CODE_OAUTH_TOKEN. Repo owner is always
+    # trusted (no config needed); extend to a contributor with:
+    #   gh variable set CLAUDE_TRUSTED_ACTORS --body "alice,bob"
     if: |
-      (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
-      (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
-      (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      (
+        (github.event_name == 'issue_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review_comment' && contains(github.event.comment.body, '@claude')) ||
+        (github.event_name == 'pull_request_review' && contains(github.event.review.body, '@claude')) ||
+        (github.event_name == 'issues' && (contains(github.event.issue.body, '@claude') || contains(github.event.issue.title, '@claude')))
+      ) &&
+      (
+        github.actor == github.event.repository.owner.login ||
+        contains(format(',{0},', vars.CLAUDE_TRUSTED_ACTORS), format(',{0},', github.actor))
+      )
     runs-on: ubuntu-latest
     permissions:
       # Trust boundary for these scopes: docs/SECURITY-MODEL.md (responder row).
