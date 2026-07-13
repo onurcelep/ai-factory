@@ -38,6 +38,11 @@ prints** — a pipeline that has never completed one loop (issue → @claude →
 branch → PR → review) is not set up. The init also protects `main` with a
 require-PR ruleset where the plan allows.
 
+Only the repo owner can trigger a run by default — adding a collaborator
+with write access does **not** let them spend your `CLAUDE_CODE_OAUTH_TOKEN`
+until you explicitly extend `CLAUDE_TRUSTED_ACTORS` (see
+[SECURITY-MODEL.md § The `CLAUDE_TRUSTED_ACTORS` gate](SECURITY-MODEL.md#the-claude_trusted_actors-gate-write-access--token-spend)).
+
 ### Onboard an existing repo (created before ai-factory)
 
 Same command. `/factory-init` is designed for this case:

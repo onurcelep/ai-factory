@@ -116,6 +116,10 @@ steps:
    confirm it pushes a `claude/` branch and posts a "Create PR ➔" link,
    open the PR from the link, confirm the auto review posts, then merge or
    close. A pipeline that has never completed one loop is not set up.
+5. Only the repo owner can trigger a run — a future collaborator with
+   write access does not get to spend your `CLAUDE_CODE_OAUTH_TOKEN` until
+   you run `gh variable set CLAUDE_TRUSTED_ACTORS --body "alice,bob"`. See
+   `docs/SECURITY-MODEL.md`'s `CLAUDE_TRUSTED_ACTORS` section.
 
 ## 7. Report
 

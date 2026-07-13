@@ -13,6 +13,16 @@ concurrency:
 jobs:
   claude-review:
     runs-on: ubuntu-latest
+    # Trust boundary: docs/SECURITY-MODEL.md (review row). Unlike the
+    # responder, this workflow has no @claude/actor check at all upstream —
+    # it fires on every pull_request event. Gate it the same way: repo
+    # owner and 'claude[bot]' (the machine-authored-PR case the allowed_bots
+    # input below exists for) are always trusted; extend to a contributor
+    # with `gh variable set CLAUDE_TRUSTED_ACTORS --body "alice,bob"`.
+    if: |
+      github.event.pull_request.user.login == github.event.repository.owner.login ||
+      github.event.pull_request.user.login == 'claude[bot]' ||
+      contains(format(',{0},', vars.CLAUDE_TRUSTED_ACTORS), format(',{0},', github.event.pull_request.user.login))
     permissions:
       # Trust boundary for these scopes: docs/SECURITY-MODEL.md (review row).
       # pull-requests:write exists ONLY so the assertion step below can post
