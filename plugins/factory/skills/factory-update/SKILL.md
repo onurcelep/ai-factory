@@ -61,19 +61,22 @@ This tool will never modify content outside the marker boundaries.
 
 **Action-session limitation — read this before touching any
 `.github/workflows/**` path.** The @claude App token cannot write there
-at all (GitHub rejects the push, and the action's own tool policy
-matches that boundary), so treat every file under `.github/workflows/`
-as **read-only in this session, full stop**: never call `Edit` or
-`Write` on one, and do not "try it and see" — a denied write attempt is
-turns spent for nothing, and a run that keeps retrying instead of
-backing off can burn its whole turn budget and error out
-(`error_max_turns`) without ever reaching the CLAUDE.md version-stamp
-update, which is the one change that actually clears a propagation
-issue. Instead: `Read` the current file and the template, diff them
-yourself (textually, in your head or a scratch comparison — no write
-tool involved), and if they differ, put the exact diff in your report
-for a human (or a local session, which has no such restriction) to
-apply by hand. This applies even if the diff is just a comment or
+at all: an `Edit`/`Write` on a workflow file can succeed in the working
+tree (this session runs `claude.yml`'s default, unscoped tool policy —
+no per-path deny), but the eventual `git push` is rejected by GitHub
+itself. Treat every file under `.github/workflows/` as **read-only in
+this session, full stop** anyway: never call `Edit` or `Write` on one,
+and do not "try it and see" — an edit you can't ship is turns spent for
+nothing, and a run that presses ahead (retrying the push, or trying to
+work around the rejection) instead of backing off immediately can burn
+its whole turn budget and error out (`error_max_turns`) without ever
+reaching the CLAUDE.md version-stamp update, which is the one change
+that actually clears a propagation issue. Instead: `Read` the current
+file and the template, diff them yourself (textually, in your head or a
+scratch comparison — no write tool involved), and if they differ, put
+the exact diff in your report for a human (or a local session, which has
+no such restriction) to apply by hand. This applies even if the diff is
+just a comment or
 whitespace change — do not special-case "small" diffs into an attempt.
 Do the CLAUDE.md and settings.json work below regardless of whether a
 workflow diff exists; they are independent and unblocked.
