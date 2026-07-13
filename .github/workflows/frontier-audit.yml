@@ -31,7 +31,7 @@ jobs:
         uses: anthropics/claude-code-action@v1
         with:
           claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
-          # Model policy: see the factory:model-routing skill. Fable as the
+          # Model policy: see the factory:model-routing skill. Opus 4.8 as the
           # single judge: it is research-heavy, runs once a week, and what it
           # ships propagates into every consuming repo — depth matters most.
           # The mechanical source sweep fans out to Sonnet subagents (Task),
@@ -42,7 +42,7 @@ jobs:
           # fan-out and the denial fixes); the old 60 cap killed a legitimate
           # drift-finding run at turn 61 and lost its report.
           claude_args: |
-            --model claude-fable-5
+            --model claude-opus-4-8
             --max-turns 80
             --allowedTools Read,Glob,Grep,Write,Edit,WebSearch,WebFetch,TodoWrite,Task,Bash(git:*),Bash(gh:*),Bash(./scripts/validate.sh),Bash(echo:*),Bash(date:*),Bash(ls:*),Bash(cat:*)
           prompt: |
