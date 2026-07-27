@@ -133,7 +133,11 @@ ok "settings/merge preserves repo keys and adds template wiring"
 cmp -s "$TMP/settings.json" "$TMP/settings2.json" || fail "settings/merge not idempotent"
 ok "settings/merge idempotent"
 
-# --- Case 6: settings.json merge preserves a consumer's ref/sha pin ---
+# --- Case 6: settings.json merge preserves a consumer's marketplace source pin ---
+# The stability pin is the `ref` (branch/tag; a marketplace source does not
+# honor `sha`). merge-settings preserves every repo-owned source key, so a
+# stray `sha` a repo added under earlier guidance still survives untouched —
+# this fixture carries one to prove that defensive preservation.
 "${STAMP[@]}" merge-settings --template "$ST" --target "$FX/settings/pinned-input.json" >"$TMP/pinned.json"
 check_or_regen "settings/pinned-merge" "$FX/settings/pinned-expected.json" "$TMP/pinned.json"
 python3 - "$TMP/pinned.json" <<'PYEOF' || fail "settings/pinned-merge lost the repo's ref/sha pin"

@@ -149,7 +149,7 @@ ok "version-bump guard"
 # pin are the whole safety story — they must not silently disappear.
 grep -q 'Rolling back a bad skill' docs/OPERATIONS.md || fail "OPERATIONS.md must carry the skill-rollback runbook"
 grep -q 'Convergence time per environment' docs/OPERATIONS.md || fail "OPERATIONS.md must document per-environment convergence for a skill rollback"
-grep -q 'extraKnownMarketplaces' docs/OPERATIONS.md || fail "OPERATIONS.md must document the opt-in consumer pin (extraKnownMarketplaces ref/sha)"
+grep -q 'extraKnownMarketplaces' docs/OPERATIONS.md || fail "OPERATIONS.md must document the opt-in consumer pin (extraKnownMarketplaces ref)"
 ok "skills channel pin/rollback story"
 
 # --- Security model doc + cost report ---
