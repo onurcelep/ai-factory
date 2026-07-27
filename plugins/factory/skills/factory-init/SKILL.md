@@ -45,8 +45,9 @@ If identical, report "already current" and skip.
 For `.claude/settings.json`, if the target exists, MERGE instead of replace:
 add the template's `extraKnownMarketplaces` entry and its `enabledPlugins`
 entries (the template is the source of truth for the marketplace and plugin
-names), preserving everything else in the file — including any `ref`/`sha`
-pin on a marketplace source (repo-owned; see `factory_stamp.py merge-settings`).
+names), preserving everything else in the file — including any `ref` pin
+(branch/tag) on the marketplace source (repo-owned; a marketplace source
+honors `ref` but not `sha` — see `factory_stamp.py merge-settings`).
 
 For `docs/memory/MEMORY.md` and the seeded fact file, create only if
 missing. If either already exists, leave it completely untouched — after

@@ -111,9 +111,12 @@ def merge_settings(target: dict, template: dict) -> dict:
     preserving every other repo-owned key and entry. Template values win for the
     keys it owns; repo-added entries in those maps survive.
 
-    Exception: a repo's `ref`/`sha` pin on a marketplace source is repo-owned
-    (the stability opt-in documented in docs/OPERATIONS.md) — the template must
-    not un-pin it on update. Template wins for everything else in the entry.
+    Exception: a repo's `ref` pin on a marketplace source is repo-owned (the
+    stability opt-in documented in docs/OPERATIONS.md) — the template must not
+    un-pin it on update. A marketplace source honors `ref` (branch/tag) but not
+    `sha` (an exact-commit pin is a plugin-source capability), so a stray `sha`
+    a repo may have added is preserved defensively but has no effect. Template
+    wins for everything else in the entry.
     """
     for key in ("extraKnownMarketplaces", "enabledPlugins"):
         merged = dict(target.get(key, {}))

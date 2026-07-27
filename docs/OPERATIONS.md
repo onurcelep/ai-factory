@@ -242,9 +242,7 @@ CI, and nothing slower you must wait on beyond a machine's `plugin update`.
 ### Pin a consumer repo to a known-good skills version (opt-in)
 
 A repo that values stability over freshness can pin the marketplace source
-to a **tag or commit SHA** in its committed `.claude/settings.json`. This
-is a documented `extraKnownMarketplaces` capability
-(`https://docs.claude.com/en/docs/claude-code/plugin-marketplaces`):
+to a **branch or tag** (a `ref`) in its committed `.claude/settings.json`:
 
 ```json
 {
@@ -253,22 +251,24 @@ is a documented `extraKnownMarketplaces` capability
       "source": {
         "source": "github",
         "repo": "onurcelep/ai-factory",
-        "ref": "v0.5.0",
-        "sha": "<full-commit-sha>"
+        "ref": "v0.5.0"
       }
     }
   }
 }
 ```
 
-When both are set the `sha` is the effective pin: Claude Code checks out
-that commit directly, and the install still succeeds even if the branch or
-tag named by `ref` is later deleted upstream, as long as the commit stays
-reachable. Rolling forward is a one-line edit to a newer `ref`/`sha`;
-rolling back is editing it to an older one. The pin **survives
-`/factory-update`**: the settings merge treats `ref`/`sha` as repo-owned
-and never removes them (`scripts/lib/factory_stamp.py merge-settings`,
-golden-tested).
+A **marketplace** source supports `ref` (branch/tag) **but not `sha`** — an
+exact-commit pin is a *plugin*-source capability, not a marketplace-source
+one (docs: `https://docs.claude.com/en/docs/claude-code/plugin-marketplaces`,
+"Marketplace sources vs plugin sources"). So pin `ref` to an **immutable
+tag** you do not move or delete: a branch `ref` tracks that branch's tip,
+and adding a `sha` here does nothing — it is silently ignored, and a
+`sha`-only entry (no `ref`) resolves to the default branch, the opposite of
+pinning. Rolling forward or back is a one-line edit to a different `ref`.
+The pin **survives `/factory-update`**: the settings merge treats a
+marketplace source's `ref` as repo-owned and never removes it
+(`scripts/lib/factory_stamp.py merge-settings`, golden-tested).
 
 **This escape hatch covers local and cloud sessions only.** The `@claude`
 Action cannot honor it — its `plugin_marketplaces` input takes a bare
