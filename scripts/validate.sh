@@ -116,13 +116,29 @@ ok "workflow plugin self-loading (repo $SLUG)"
 
 # --- Propagation + operations doc ---
 PW=.github/workflows/factory-propagate.yml
+PS=scripts/propagate.py
 [ -f "$PW" ] || fail "factory-propagate.yml missing"
+[ -f "$PS" ] || fail "scripts/propagate.py missing"
 grep -q 'FACTORY_PROPAGATE_TOKEN' "$PW" || fail "propagate workflow must gate on FACTORY_PROPAGATE_TOKEN"
-grep -q 'factory:standard:begin' "$PW" || fail "propagate workflow must detect the stamp marker"
-grep -q 'factory:version' "$PW" || fail "propagate workflow must read the version stamp"
+grep -q 'propagate.py' "$PW" || fail "propagate workflow must run scripts/propagate.py"
+python3 -m py_compile "$PS" || fail "propagate.py has a syntax error"
+grep -q 'factory:standard:begin' "$PS" || fail "propagation must detect the stamp marker"
+grep -q 'factory:version' "$PS" || fail "propagation must read the version stamp"
+# The stamping semantics have one home (golden-tested); propagation calls it.
+grep -q 'import factory_stamp' "$PS" || fail "propagation must reuse scripts/lib/factory_stamp.py, not reimplement stamping"
+grep -q 'dry.run' "$PS" || fail "propagation must offer a dry run (plan only, no writes)"
+# Invariant 2 (docs/SECURITY-MODEL.md): merge is the one irreversible step and
+# it is always a human's. Propagation opens PRs; it never merges one.
+grep -qE '"merge"|--auto|gh pr merge' "$PS" && fail "propagation must never merge a PR (SECURITY-MODEL invariant 2)"
 [ -f docs/OPERATIONS.md ] || fail "docs/OPERATIONS.md missing"
 grep -q 'factory-propagate' docs/OPERATIONS.md || fail "OPERATIONS.md must document propagation setup"
 grep -q 'FACTORY_PROPAGATE_TOKEN' docs/OPERATIONS.md || fail "OPERATIONS.md must document the propagation token"
+# The PAT scopes are the propagation trust boundary: they must be stated where
+# the operator creates the token, and held to account in the security model.
+for scope in 'Contents: write' 'Pull requests: write' 'Workflows: write'; do
+  grep -qF "$scope" docs/OPERATIONS.md || fail "OPERATIONS.md must state the propagation PAT scope '$scope'"
+done
+grep -q 'factory-update/' docs/SECURITY-MODEL.md || fail "SECURITY-MODEL.md must describe the propagation branch/PR path"
 ok "propagation + operations doc"
 
 # --- Stamping semantics: golden-file behavioural tests ---

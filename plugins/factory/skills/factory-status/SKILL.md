@@ -71,8 +71,10 @@ from that cache, so a stale local plugin means stale skills locally even
 when every repo is current.
 
 If the propagation workflow is set up (see `docs/OPERATIONS.md`), stale
-repos should already have an open update issue — link any found
-(`gh issue list -R <owner>/<repo> --search "factory-update in:title"`)
+repos should already have an open `factory-update to <version>` PR, or a
+fallback `@claude` issue where the mechanical stamp stepped aside. Link
+whichever exists (`gh pr list -R <owner>/<repo> --search "factory-update in:title"`,
+`gh issue list -R <owner>/<repo> --search "factory-update in:title"`)
 instead of just saying "run it manually".
 
 For fleet **spend** (private, never documented anywhere): run
