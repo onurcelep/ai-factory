@@ -215,6 +215,14 @@ grep -q -- '--allowedTools' "$FA" || fail "frontier-audit must pin a scoped --al
 if grep -o -- '--allowedTools [^ ]*' "$FA" | tr ' ,' '\n\n' | grep -qx 'Bash'; then
   fail "frontier-audit must not allow bare Bash (WebFetch + push rights job)"
 fi
+# The reviewer reads an untrusted diff and holds no contents write. Its
+# allowlist must cover diff inspection + posting and stop there: bare Bash or
+# Bash(gh:*) would hand it gh api, which no prefix can pin to one endpoint.
+RA=$(grep -o -- '--allowedTools "[^"]*"' "$T/claude-code-review.yml" | sed 's/^--allowedTools "//; s/"$//')
+[ -n "$RA" ] || fail "review workflow must pin a scoped --allowedTools (load-bearing: SECURITY-MODEL.md)"
+if printf '%s' "$RA" | tr ',' '\n' | grep -qxE 'Bash|Bash\(gh:\*\)'; then
+  fail "review allowlist must stay scoped: no bare Bash, no Bash(gh:*)"
+fi
 grep -q '"role": "readonly"' evals/cases/release-flow.json || fail "cross-role behavioral eval missing (release-flow role: readonly)"
 ok "role contracts"
 

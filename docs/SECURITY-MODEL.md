@@ -53,7 +53,7 @@ the value there.
 | **Trigger surface** | Every `pull_request` event (`opened`/`synchronize`/`ready_for_review`/`reopened`) — see the `on:` block. Unlike the responder, there is no `@claude` text gate at all upstream of the actor check below: any PR fires it. |
 | **Token + effective permissions** | Near-read-only: the `permissions:` block in `templates/claude-code-review.yml` grants no `contents` write — this job cannot push. `pull-requests: write` exists solely for the assertion step's self-report comment (PR comments require this scope, not `issues: write` — verified via a live 403); it adds no capability class the job lacks (the app token already posts the review comment). Read the block for the exact scopes. |
 | **Injection surfaces** | The PR diff and PR/issue metadata it reviews — untrusted, since a machine-authored PR is exactly the case this reviews. |
-| **Mitigation holding each risk** | **Who can spend *your* token: the job-level `CLAUDE_TRUSTED_ACTORS` gate** (below) — since this workflow has no actor check upstream (it isn't the `claude-code-action` responder gate, it's a plain `pull_request` trigger), the `if:` on the job itself requires the PR author be the repo owner, on the allowlist, or `claude[bot]`. **Bot-authored PRs still get reviewed: the `allowed_bots: 'claude'` action input** — the action separately rejects non-human actors by default, so the responder's own `claude`-authored proposals are explicitly allowlisted so they are *not* skipped by the action itself (the job-level gate above allowlists the same login so the two don't fight). The blast radius is bounded structurally: **no contents write** means even a fully injected review agent cannot push; the only write surface is comment posting, which the app token already had. |
+| **Mitigation holding each risk** | **Who can spend *your* token: the job-level `CLAUDE_TRUSTED_ACTORS` gate** (below) — since this workflow has no actor check upstream (it isn't the `claude-code-action` responder gate, it's a plain `pull_request` trigger), the `if:` on the job itself requires the PR author be the repo owner, on the allowlist, or `claude[bot]`. **Bot-authored PRs still get reviewed: the `allowed_bots: 'claude'` action input** — the action separately rejects non-human actors by default, so the responder's own `claude`-authored proposals are explicitly allowlisted so they are *not* skipped by the action itself (the job-level gate above allowlists the same login so the two don't fight). The blast radius is bounded structurally: **no contents write** means even a fully injected review agent cannot push; the only write surface is comment posting, which the app token already had. **Bounded capability: the scoped `--allowedTools` pin** in the `claude_args` block — the reviewer gets read-only diff inspection plus the `gh pr` subcommands that post its findings, and nothing wider. `gh api` is excluded deliberately: a prefix allowlist cannot pin an api call to a single endpoint, so allowing it would restore the token's full write surface that the `permissions:` block just removed. Read the pin for the exact list. |
 
 ### 3. Propagate — `.github/workflows/factory-propagate.yml` (fleet fan-out)
 
@@ -142,9 +142,11 @@ The contract rules, in force:
 2. **A role's allowlist is part of its trust boundary, not a
    convenience setting.** Widening one to satisfy an instruction is a
    security decision — argue it against the tables above, not against a
-   denial count. (The reviewer currently runs on the action's default
-   tool policy; an explicit pin is deliberately deferred until issue #42
-   yields evidence of what a review legitimately needs.)
+   denial count. (The reviewer now carries an explicit pin, sized from
+   issue #42's evidence: exactly the diff-reading and `gh pr` posting
+   calls a review makes. Running it on the action's default tool policy
+   was the other half of the same incident class — denied writes, no
+   posted review, a red assertion.)
 3. **Denials are the mismatch signal.** The review workflow warns when
    the denial count exceeds 20 and preserves the execution trace as a
    run artifact on failure or high denials, so "what did the agent try
@@ -184,8 +186,11 @@ everything *except* workflow-file changes — see `docs/OPERATIONS.md`.)
   "Create PR ➔" link and never merges.
 - **GitHub workflow-file push refusal** — platform behavior (invariant 3);
   see also the `factory:ci-agent-ops` skill.
-- **Scoped `--allowedTools`** — the frontier-audit `claude_args` pin bounds
-  the audit agent's `Bash` surface.
+- **Scoped `--allowedTools`** — the frontier-audit and review `claude_args`
+  pins bound each agent's `Bash` surface to the calls its job actually
+  makes, with no general shell. The review pin is the tighter of the two
+  (named `gh pr` subcommands, not `gh`), since a job with no `contents`
+  write should not regain a general API client.
 - **`CLAUDE_TRUSTED_ACTORS` gate** — the job-level `if:` on the responder
   and review workflows (see above) that narrows "may trigger a run" to
   the repo owner plus an explicit allowlist, independent of GitHub write
@@ -201,6 +206,7 @@ what you are giving up:
 | Drop the `main` require-PR ruleset | Invariant 1 — agents can now push to `main` (their tokens already carry write). |
 | Widen `allowed_bots` to `'*'` or set `allowed_non_write_users` | The actor check — untrusted parties can drive a write-capable run. |
 | Widen frontier-audit `--allowedTools` (e.g. bare `Bash`) | The bound on the highest-injection-risk job — a fetched page can now propose arbitrary commands. |
+| Widen review `--allowedTools` to `Bash(gh:*)` or bare `Bash` | The bound on an agent whose only input is an untrusted diff — `gh api` reaches every endpoint the token can write, undoing the read-only `permissions:` block. |
 | Give the workflow/App token `workflow` scope | Invariant 3 — agents can rewrite their own triggers and permissions. |
 | Merge PRs by bot/automation instead of a human | Invariant 2 — the one human checkpoint on irreversible change. |
 | Set `CLAUDE_TRUSTED_ACTORS` to `*`, or drop the job-level `if:` gate | Every write-access collaborator can spend the repo owner's `CLAUDE_CODE_OAUTH_TOKEN` — the gap this mitigation exists to close. |
