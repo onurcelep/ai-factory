@@ -34,6 +34,27 @@ deeper look. Prioritize primary sources:
 - Community best practices only as secondary evidence, never as the sole
   basis for a change.
 
+### Hard rule: "merged" and "released" are verified claims, never inferred
+
+Whether something upstream actually shipped is what decides if this repo
+adopts it, so it is the one class of claim you must prove. A statement that
+a PR, feature, or fix is merged or released must cite one of these, obtained
+with `gh api` and quoted in your report or PR body:
+
+- the PR's own `merged` / `merged_at` fields:
+  `gh api repos/<owner>/<repo>/pulls/<n> --jq '{state,merged,merged_at}'`
+- the merge commit on the default branch:
+  `gh api repos/<owner>/<repo>/commits/<sha> --jq .commit.committer.date`
+- a release tag containing the change:
+  `gh api repos/<owner>/<repo>/releases/latest --jq '{tag_name,published_at}'`
+
+Dates that are not merge evidence, and must never be presented as one: the
+PR's `created_at`, its last-updated date, a comment date, a changelog entry
+that only announces intent, a blog post. An open PR with approvals is not
+merged. If the fields say `state: open` or `merged: false`, or you cannot
+reach the API, report the item as "proposed upstream, not merged", make no
+change on its strength, and say so in the same sentence you describe it in.
+
 ## 3. Compare and select
 
 List concrete drift: deprecated model IDs, outdated action inputs or
@@ -160,4 +181,7 @@ that silently did nothing.
   frontier-proposal issue. Never change `scripts/rebrand.sh` semantics,
   never add secrets or tokens, never edit this prompt or the workflow that
   runs it.
-- Every claim needs a reference. No reference, no change.
+- Every claim needs a reference. No reference, no change. A "merged" or
+  "released" claim needs more than a reference: it needs the verified field
+  from section 2's hard rule, in every PR body, issue, and run report where
+  the claim appears.

@@ -187,6 +187,10 @@ ok "plugin hooks (protect-main)"
 # --- Round-2 wiring: sticky review comment, init canary, decisions rows ---
 grep -q 'use_sticky_comment: true' plugins/factory/templates/claude-code-review.yml || fail "review template must use a sticky comment"
 grep -q 'Init canary' .github/prompts/frontier-audit.md || fail "frontier-audit prompt must carry the init canary"
+# A merged/released claim decides whether the fleet adopts something, so the
+# prompt must require the API field, not a date read off a PR page.
+grep -q 'merged_at' .github/prompts/frontier-audit.md || fail "frontier-audit prompt must require merged/merged_at (or a tag) as merge evidence"
+grep -q 'proposed upstream, not merged' .github/prompts/frontier-audit.md || fail "frontier-audit prompt must define the unverifiable-claim wording"
 grep -q 'claude-smoke-test' docs/DECISIONS.md || fail "decisions table must cover the smoke test"
 grep -q 'factory_stamp.py' docs/DECISIONS.md || fail "decisions table must cover the golden tests"
 grep -q 'version-guard' docs/DECISIONS.md || fail "decisions table must cover the version guard"
@@ -199,6 +203,13 @@ done
 grep -q 'pull-requests: write' "$T/claude-code-review.yml" || fail "review template needs pull-requests:write for the self-report comment (PR comments use this scope, not issues:write)"
 grep -q 'issues: write' "$T/claude-smoke-test.yml" || fail "smoke template needs issues:write for the health issue"
 grep -q 'anti-tamper' "$T/claude-code-review.yml" || fail "review assertion must discriminate the anti-tamper skip"
+# The skip is the action working as designed, so it reports green with a
+# notice; red on this step must keep meaning "something is wrong".
+grep -q '::notice::Review skipped' "$T/claude-code-review.yml" || fail "review assertion must report the anti-tamper skip green (::notice), not red"
+grep -q '::error::Anti-tamper' "$T/claude-code-review.yml" && fail "the anti-tamper skip must not emit ::error; a red that means 'nothing is wrong' erodes the signal"
+for sig in '::error::Silent failure' '::error::Dead-on-arrival' '::error::Review produced no posted artifact'; do
+  grep -qF "$sig" "$T/claude-code-review.yml" || fail "review assertion lost a genuine red case: $sig"
+done
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
 ok "CI self-reporting"
 

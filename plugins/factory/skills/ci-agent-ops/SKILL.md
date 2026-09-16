@@ -30,22 +30,28 @@ by artifacts and by the result JSON in the run log:
   retry with a new push. A `permission_denials_count` over ~20 on any
   run means the agent's instructions and its tool allowlist disagree —
   see the role contracts in ai-factory's `docs/SECURITY-MODEL.md`.
-- **Anti-tamper skip (looks dead, is not):** on any PR that modifies a
-  `claude*.yml` workflow file, the action refuses to run — the workflow
-  file must be identical to the default branch's version — and produces
-  an instant no-artifact run (red where the assertion step exists, green
-  and silent where it does not). This is NOT a token failure: do not
-  rotate anything. Expected on factory-update PRs that touch workflows;
-  the run behaves normally again after merge. Discriminate by reading
-  the run log for "Workflow validation failed".
+- **Anti-tamper skip (looks dead, is not):** whenever a PR's
+  `claude*.yml` workflow file differs from the default branch's copy, the
+  action refuses to run and produces an instant no-artifact run. The
+  trigger is the difference, not the edit: a PR stacked on a branch that
+  edits the workflow is skipped too, without touching the file itself.
+  This is NOT a token failure: do not rotate anything. Since 0.6.11 the review assertion reports this case **green**
+  with a `::notice` plus a self-report comment saying the review was
+  skipped (before that it was a deliberate red, which taught operators to
+  wave off reds on exactly the PRs that change CI). Expected on
+  factory-update PRs that touch workflows; the run behaves normally again
+  after merge. Discriminate by reading the run log for "Workflow
+  validation failed". Nothing else on this step passes green: a review
+  that ran and posted nothing, or the dead-token signature, is still red.
 
 ## Self-reports: read the comment before the logs
 
-Since 0.6.4 a failing health assertion explains itself: the responder and
+Since 0.6.4 the health assertion explains itself: the responder and
 review workflows post/update a marked comment (`factory:ci-self-report`)
 on the triggering issue/PR naming the cause (anti-tamper skip vs silent
-failure vs dead-token signature), and a failing smoke test files/updates a
-**"CI health: Claude smoke test failing"** issue. Check those first; dig
+failure vs dead-token signature). Read the comment, not the check color:
+the anti-tamper skip posts one on a **green** run. A failing smoke test
+files/updates a **"CI health: Claude smoke test failing"** issue. Check those first; dig
 into run logs only when no self-report exists (which is itself a signal —
 the assertion step never ran).
 
