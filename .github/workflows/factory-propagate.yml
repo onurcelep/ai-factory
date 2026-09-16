@@ -1,15 +1,23 @@
 name: Factory Propagate
 
-# When the stamped standard changes on main, find every factory-stamped
-# repo of this owner and file an update issue in each stale one, tagging
-# @claude to run /factory-update and push a PR branch. Consumer repos need
-# nothing beyond the standard stamp; a human still merges every PR.
+# When the stamped standard changes on main, restamp every factory-stamped
+# repo of this owner and open the update PR there directly: clone, run the
+# mechanical stamp, commit on factory-update/<version>, push, open the PR.
+# A repo the mechanical stamp cannot reconcile (locally modified stamped
+# files, no marker block) falls back to the old route, an @claude issue
+# asking the responder to run /factory-update. Nothing is merged
+# automatically: a human still merges every PR.
 #
 # Requires the FACTORY_PROPAGATE_TOKEN secret: a fine-grained PAT with
-# Contents: read and Issues: write on this owner's repos. Without it the
-# workflow skips with a notice (safe default for forks that don't want
-# propagation). The default GITHUB_TOKEN cannot be used: it is scoped to
-# this repository only.
+# Contents: write, Pull requests: write, Workflows: write and Issues: write
+# on this owner's repos (Workflows: write is what lets a propagated update
+# carry the workflow files themselves; without it the push is rejected).
+# Without the secret the workflow skips with a notice (safe default for
+# forks that don't want propagation). The default GITHUB_TOKEN cannot be
+# used: it is scoped to this repository only.
+#
+# Trust boundary: docs/SECURITY-MODEL.md (propagate row). Setup and the
+# exact PAT scopes: docs/OPERATIONS.md "Enable automatic propagation".
 
 on:
   push:
@@ -18,6 +26,11 @@ on:
       - 'plugins/factory/templates/**'
       - 'plugins/factory/.claude-plugin/plugin.json'
   workflow_dispatch: # re-run propagation manually (e.g. after setting the token)
+    inputs:
+      dry_run:
+        description: 'Print the per-repo plan and write nothing'
+        type: boolean
+        default: false
 
 concurrency:
   group: factory-propagate
@@ -32,48 +45,13 @@ jobs:
       - name: Checkout repository
         uses: actions/checkout@v6
         with:
-          fetch-depth: 1
+          # Full history: the stamp compares each consumer's workflow files
+          # against the template as of the version that repo was stamped from,
+          # so a locally modified file is never mistaken for a stale one.
+          fetch-depth: 0
 
-      - name: File update issues in stale consumer repos
+      - name: Stamp consumer repos and open their update PRs
         env:
           GH_TOKEN: ${{ secrets.FACTORY_PROPAGATE_TOKEN }}
-        run: |
-          set -euo pipefail
-          if [ -z "${GH_TOKEN:-}" ]; then
-            echo "::notice::FACTORY_PROPAGATE_TOKEN not set — skipping propagation. See docs/OPERATIONS.md to enable."
-            exit 0
-          fi
-          VERSION=$(python3 -c "import json; print(json.load(open('plugins/factory/.claude-plugin/plugin.json'))['version'])")
-          OWNER="${GITHUB_REPOSITORY_OWNER}"
-          SELF="${GITHUB_REPOSITORY#*/}"
-          echo "Propagating factory v${VERSION} for owner ${OWNER}"
-          for repo in $(gh repo list "$OWNER" --limit 200 --json name --jq '.[].name'); do
-            [ "$repo" = "$SELF" ] && continue
-            claude_md=$(gh api "repos/$OWNER/$repo/contents/CLAUDE.md" --jq .content 2>/dev/null | base64 -d 2>/dev/null) || continue
-            echo "$claude_md" | grep -q 'factory:standard:begin' || continue
-            stamped=$(echo "$claude_md" | grep -o 'factory:version [0-9.]*' | awk '{print $2}' | head -1 || true)
-            # Version-aware comparison (sort -V, dependency-free): a repo stamped
-            # >= latest is current — treat "ahead" (stamped from a newer testing
-            # branch) as current so it never gets a pointless downgrade issue.
-            if [ -n "$stamped" ]; then
-              if [ "$stamped" = "$VERSION" ]; then
-                echo "$repo: current ($VERSION)"
-                continue
-              fi
-              highest=$(printf '%s\n%s\n' "$stamped" "$VERSION" | sort -V | tail -1)
-              if [ "$highest" = "$stamped" ]; then
-                echo "$repo: ahead ($stamped > $VERSION) — no update"
-                continue
-              fi
-            fi
-            title="factory-update to ${VERSION}"
-            existing=$(gh issue list -R "$OWNER/$repo" --state open --search "\"$title\" in:title" --json number --jq length || true)
-            if [ "${existing:-0}" -gt 0 ]; then
-              echo "$repo: stale (${stamped:-pre-0.5.0}) — update issue already open"
-              continue
-            fi
-            echo "$repo: stale (${stamped:-pre-0.5.0}) — filing update issue"
-            gh issue create -R "$OWNER/$repo" \
-              --title "$title" \
-              --body "@claude the ai-factory standard changed on main (now v${VERSION}; this repo is stamped ${stamped:-pre-0.5.0}). Run /factory-update per the factory:factory-update skill. Your session's plugin cache was installed fresh from the marketplace at run start, so stamp directly from \${CLAUDE_PLUGIN_ROOT}/templates/ — do not attempt git clone or network fetches (the sandbox blocks them). Refresh the settings wiring and the CLAUDE.md standard block (including its version stamp — that alone closes this issue even if nothing else changed). Workflow files under .github/workflows/ are OFF LIMITS in this session: this Action's token cannot write there, so never call Edit or Write on them — Read-diff them against the templates instead and report the exact diff in your summary for a human to apply by hand, per the factory:factory-update skill's Action-session limitation. Commit only the files you actually changed on a claude/ branch and push. Post the Create PR link when done. Touch nothing outside the stamped files and the standard block."
-          done
+          FACTORY_PROPAGATE_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+        run: python3 scripts/propagate.py

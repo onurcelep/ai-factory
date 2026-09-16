@@ -137,7 +137,8 @@ ai-factory/
 ├── evals/                  # skill eval suite — cases + docs
 ├── tests/                  # unit tests + stamping fixtures
 ├── docs/                   # one doc per question — see "Where to go" above
-├── scripts/                # validate.sh, run-evals.py, rebrand.sh, cost-report.sh
+├── scripts/                # validate.sh, run-evals.py, propagate.py, rebrand.sh,
+│                           #   cost-report.sh
 ├── .github/workflows/      # this repo's CI: validate, version-guard,
 │                           #   propagation, frontier audit, dogfooded templates
 ├── CLAUDE.md               # agent entry point for working on this repo

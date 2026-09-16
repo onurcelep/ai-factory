@@ -60,10 +60,11 @@ After onboarding, the repo is maintained exactly like a new one.
 ### Maintain a stamped repo
 
 **Target: nothing.** With the propagation workflow enabled (below), a
-template change on ai-factory's main automatically files an update issue
-in every stale repo; @claude runs the update and pushes a branch; you
-click its "Create PR" link and merge. Your only recurring job is the
-merge button.
+template change on ai-factory's main opens a `factory-update to <version>`
+PR in every stale repo, workflow files included. Your only recurring job
+is the merge button. A repo whose stamped files the mechanical stamp
+cannot reconcile gets the `@claude` update issue instead, with the reason
+in the body.
 
 Manual fallbacks, any time:
 
@@ -74,30 +75,66 @@ Manual fallbacks, any time:
 
 ## Enable automatic propagation (one-time, ~2 minutes)
 
-1. Create a fine-grained PAT for your account with **Contents: read** and
-   **Issues: write** on your repositories.
+1. Create a fine-grained PAT for your account, scoped to the repositories
+   you want propagated, with these repository permissions:
+   **Contents: write**, **Pull requests: write**, **Workflows: write**,
+   **Issues: write**.
 2. `gh secret set FACTORY_PROPAGATE_TOKEN -R <owner>/<this-repo>`
+
+Why each scope: Contents to push the stamped branch, Pull requests to open
+the PR, Workflows because a stamped branch contains
+`.github/workflows/claude*.yml` and GitHub rejects a push touching those
+without it, Issues for the fallback route below. Scope the PAT to the repo
+list you actually propagate to, not "all repositories": that list is the
+blast radius (see
+[SECURITY-MODEL.md](SECURITY-MODEL.md#per-workflow-trust-boundaries),
+propagate row).
 
 Done. On every merge to main that touches `plugins/factory/templates/**`
 (or the plugin version), `.github/workflows/factory-propagate.yml` scans
-your repos for the factory stamp, compares versions, and files one
-`factory-update to <version>` issue per stale repo (idempotent: it skips
-repos that are current or already have the issue open). Without the
-secret, the workflow skips with a notice — propagation is opt-in.
+your repos for the factory stamp, compares versions, and for each stale
+repo clones it, runs the mechanical stamp
+(`scripts/lib/factory_stamp.py`, the same reference implementation the
+golden tests pin), commits on `factory-update/<version>` as "ai-factory
+propagation", pushes, and opens the `factory-update to <version>` PR.
+Reruns for the same version update that branch and PR in place
+(force-with-lease on that branch only). Without the secret, the workflow
+skips with a notice — propagation is opt-in.
+
+**Nothing is merged for you.** Propagation stops at an open PR; merging
+stays the human checkpoint it has always been
+([SECURITY-MODEL.md](SECURITY-MODEL.md) invariant 2).
+
+**Fallback: the `@claude` issue, for repos the stamp cannot reconcile.**
+The deterministic path only applies mechanical transforms. If a repo has
+a stamped file it cannot explain (a workflow matching neither the current
+template nor the one that repo was stamped from, an unparseable
+`.claude/settings.json`, a CLAUDE.md with no marker block), or if the push
+or PR creation is refused, propagation files the old `@claude` update
+issue there instead, with the reason in the body. No repo is left silently
+unprocessed, and the job summary lists every repo with its outcome
+(changed / unchanged / fallback / current / ahead).
 
 Requirements in consumer repos (all standard): the stamped `claude.yml`
-(so @claude answers issues), the Claude GitHub App, and the
+(so @claude can answer a fallback issue), the Claude GitHub App, and the
 `CLAUDE_CODE_OAUTH_TOKEN` secret (`ANTHROPIC_API_KEY` on API-billing
 forks — see [FORKING.md](FORKING.md#billing-subscription-or-api-key)).
 Consumer repos carry **zero** propagation-specific config.
 
-**Known limitation:** GitHub blocks App-token pushes that modify
-`.github/workflows/` files, so a propagated update can deliver
-everything *except* changes to the workflow files themselves — the
-agent applies the rest and reports the workflow diff for a human to
-apply (a one-line `git` push under your own account, which has the
-`workflow` scope). Template changes to workflows are rare; when one
-ships, expect that one manual step per repo.
+**Dry run before you trust it.** Run the workflow from the Actions tab
+with `dry_run` checked (or `FACTORY_PROPAGATE_DRY_RUN=1 GH_TOKEN=...
+python3 scripts/propagate.py` locally): it prints the per-repo plan, which
+files each PR would carry, and which repos would fall back, without
+writing anything anywhere.
+
+**Workflow files ride along now.** GitHub still blocks *App-token* pushes
+that modify `.github/workflows/` (see
+[SECURITY-MODEL.md](SECURITY-MODEL.md) invariant 3), which is why the
+`@claude` fallback route still cannot deliver workflow changes and reports
+their diff for a human instead. The propagation PAT is a different token
+and carries Workflows: write, so the deterministic path delivers the whole
+stamp, workflow files included. That is also why the PAT's repo list is
+kept narrow.
 
 ## When to bump the plugin version
 
@@ -130,7 +167,7 @@ the CLAUDE.md standard block:
 compare against `plugins/factory/.claude-plugin/plugin.json` on the
 marketplace's main. The comparison is **version-aware** (`sort -V`, not
 string equality): stamped `<` latest is stale; stamped `==` latest is
-current; stamped `>` latest is reported "ahead" and gets no update issue
+current; stamped `>` latest is reported "ahead" and gets no update
 (so a repo stamped from a newer testing branch is never downgraded).
 Repos stamped before v0.5.0 have markers but no version line — they are
 reported as "stamped, version unknown"; one `/factory-update` adds the

@@ -61,9 +61,10 @@ the value there.
 | Facet | Detail |
 |---|---|
 | **Trigger surface** | `push` to `main` touching `plugins/factory/templates/**` or the plugin manifest, plus manual `workflow_dispatch`. Only someone who can land a commit on `main` (i.e. through a merged PR) can trigger it — not arbitrary issue text. |
-| **Token + effective permissions** | Runs plain shell (`gh`), **no claude-code-action, no model**. Workflow `permissions:` are read-only (see its `permissions:` block); the cross-repo writes use the separate `FACTORY_PROPAGATE_TOKEN` secret — a fine-grained PAT scoped to **Contents: read + Issues: write** on the owner's repos (see the header comment + `docs/OPERATIONS.md`). The default `GITHUB_TOKEN` is deliberately *not* usable cross-repo (scoped to this repo only). |
-| **Injection surfaces** | None from model reasoning — there is no model. The only external input is other repos' `CLAUDE.md` content, which is `grep`-matched for a stamp, never executed. |
-| **Mitigation holding each risk** | **Scope containment: the PAT is Issues-write only** — the worst a compromised propagate run can do fleet-wide is file issues (which then flow through the responder's own actor checks + ruleset + human merge). Absent the secret the job **skips with a notice** (safe default for forks). |
+| **Token + effective permissions** | Runs plain shell + `python3` (`scripts/propagate.py`), **no claude-code-action, no model**. Workflow `permissions:` are read-only (see its `permissions:` block); the cross-repo writes use the separate `FACTORY_PROPAGATE_TOKEN` secret, a fine-grained PAT scoped to the owner's listed repos (exact scopes: the workflow header comment + `docs/OPERATIONS.md`; they include write scopes, see the next row). The default `GITHUB_TOKEN` is deliberately *not* usable cross-repo (scoped to this repository only). |
+| **Injection surfaces** | None from model reasoning: there is no model. The only external input is other repos' file contents, which are matched, spliced, and compared byte-wise against the templates, never executed. |
+| **Mitigation holding each risk** | **Scope containment: a fine-grained PAT over an explicit repo list** - a compromised propagate run reaches those repos and no others, and can only propose changes there (a branch, a PR, an issue), never land them. **Human merge** (invariant 2) is the checkpoint on everything it proposes, and each consumer's own require-PR ruleset (invariant 1) keeps the pushed branch inert until then. Absent the secret the job **skips with a notice** (safe default for forks). |
+| **What the propagation token can do, and what bounds it** | It can push a `factory-update/<version>` branch to each listed consumer repo, open the PR for it, and file the fallback issue. Workflows: write is part of that, so a propagated branch may carry `.github/workflows/claude*.yml`: invariant 3 bounds the *in-repo agents*, not a human-created PAT driving a shell script with no model in it. Four things bound the blast radius: the PAT is **fine-grained and limited to the listed repos** (that list is its entire reach, so keep it narrow); the script applies **only mechanical transforms** from the golden-tested `scripts/lib/factory_stamp.py` and refuses anything it cannot reconcile; there is **no auto-merge** (invariant 2, pinned by `validate.sh`); and the consumer's **require-PR ruleset on `main`** (invariant 1) means the pushed branch changes nothing until a human merges the PR. |
 
 ### 4. Frontier audit — `.github/workflows/frontier-audit.yml` (weekly self-audit)
 
@@ -164,8 +165,12 @@ Independent of the tokens above, GitHub rejects any push that modifies
 scope — which neither the workflow `GITHUB_TOKEN` nor the Claude App token
 has. So no agent in the fleet can rewrite its own triggers or permissions;
 workflow changes are always applied by a human under an account that has
-the scope. (This is also why propagated template updates deliver
-everything *except* workflow-file changes — see `docs/OPERATIONS.md`.)
+the scope. (This is also why the `@claude` fallback route of propagation
+delivers everything *except* workflow-file changes, and reports their diff
+instead. The deterministic route is not an agent: it runs a shell script
+under the human-created `FACTORY_PROPAGATE_TOKEN`, which does carry
+Workflows: write, and what it produces is a PR a human merges. See
+`docs/OPERATIONS.md`.)
 
 ## Mitigations: what each one is
 
@@ -209,5 +214,6 @@ what you are giving up:
 | Widen frontier-audit `--allowedTools` (e.g. bare `Bash`) | The bound on the highest-injection-risk job — a fetched page can now propose arbitrary commands. |
 | Widen review `--allowedTools` to `Bash(gh:*)` or bare `Bash` | The bound on an agent whose only input is an untrusted diff — `gh api` reaches every endpoint the token can write, undoing the read-only `permissions:` block. |
 | Give the workflow/App token `workflow` scope | Invariant 3 — agents can rewrite their own triggers and permissions. |
-| Merge PRs by bot/automation instead of a human | Invariant 2 — the one human checkpoint on irreversible change. |
+| Merge PRs by bot/automation instead of a human | Invariant 2 — the one human checkpoint on irreversible change. This includes teaching propagation to merge the PRs it opens: it opens them precisely because a human has to see them. |
+| Scope `FACTORY_PROPAGATE_TOKEN` to "all repositories" instead of a list | The propagation blast radius: the repo list is what bounds a token that can push branches and open PRs across the fleet. |
 | Set `CLAUDE_TRUSTED_ACTORS` to `*`, or drop the job-level `if:` gate | Every write-access collaborator can spend the repo owner's `CLAUDE_CODE_OAUTH_TOKEN` — the gap this mitigation exists to close. |
