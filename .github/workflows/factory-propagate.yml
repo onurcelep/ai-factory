@@ -31,6 +31,10 @@ on:
         description: 'Print the per-repo plan and write nothing'
         type: boolean
         default: false
+      rebaseline:
+        description: 'Overwrite stamped files that match no template (drops their local edits; the PR body diffs them)'
+        type: boolean
+        default: false
 
 concurrency:
   group: factory-propagate
@@ -54,4 +58,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.FACTORY_PROPAGATE_TOKEN }}
           FACTORY_PROPAGATE_DRY_RUN: ${{ inputs.dry_run && '1' || '0' }}
+          # Only a manual dispatch can carry this: `inputs` is empty on the
+          # push trigger, and the script refuses it on any other event anyway.
+          FACTORY_PROPAGATE_REBASELINE: ${{ inputs.rebaseline && '1' || '0' }}
         run: python3 scripts/propagate.py

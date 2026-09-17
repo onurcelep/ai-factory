@@ -185,6 +185,94 @@ class TestPlanBoundaries(unittest.TestCase):
             merged["extraKnownMarketplaces"]["onur"]["source"]["ref"], "v0.6.0")
 
 
+class TestRebaseline(unittest.TestCase):
+    """The one-time escape for a repo whose stamped files were hand-patched
+    across versions and can no longer match any baseline."""
+
+    def drifted_repo(self):
+        repo = current_repo_files(version="0.6.0")
+        repo[WF] = "workflow v1 with a hand-patched line\n"
+        return repo
+
+    def test_without_the_flag_the_drifted_file_still_falls_back(self):
+        plan = propagate.plan_stamp(self.drifted_repo(), templates(),
+                                    {WF: "workflow v1\n"}, "0.7.0")
+        self.assertEqual(propagate.classify_outcome(plan), propagate.FALLBACK)
+        self.assertEqual(plan.rebaselined, {})
+        self.assertNotIn(WF, plan.writes)
+
+    def test_with_the_flag_the_template_wins_and_the_old_content_is_kept(self):
+        plan = propagate.plan_stamp(self.drifted_repo(), templates(),
+                                    {WF: "workflow v1\n"}, "0.7.0",
+                                    rebaseline=True)
+        self.assertEqual(propagate.classify_outcome(plan), propagate.CHANGED)
+        self.assertEqual(plan.writes[WF], "workflow v2\n")
+        self.assertEqual(plan.rebaselined[WF],
+                         "workflow v1 with a hand-patched line\n")
+        self.assertEqual(plan.unreconcilable, [])
+
+    def test_the_flag_does_not_touch_files_that_already_match(self):
+        """A current or cleanly upgradable file takes the normal path even
+        under rebaseline: nothing is overwritten that did not need it."""
+        repo = current_repo_files(version="0.6.0")
+        repo[WF] = "workflow v1\n"  # matches the baseline: clean upgrade
+        plan = propagate.plan_stamp(repo, templates(), {WF: "workflow v1\n"},
+                                    "0.7.0", rebaseline=True)
+        self.assertEqual(plan.rebaselined, {})
+        self.assertEqual(plan.writes[WF], "workflow v2\n")
+
+        current = propagate.plan_stamp(current_repo_files(), templates(), {},
+                                       "0.7.0", rebaseline=True)
+        self.assertEqual(current.rebaselined, {})
+        self.assertEqual(current.files, [])
+
+    def test_claude_md_without_markers_is_never_rebaselined(self):
+        """Rebaseline covers stamped workflow files only. A CLAUDE.md with no
+        marker block is an uninitialized repo, not drift."""
+        repo = self.drifted_repo()
+        repo[propagate.CLAUDE_MD] = "# CLAUDE.md\n\nnever initialized\n"
+        plan = propagate.plan_stamp(repo, templates(), {}, "0.7.0",
+                                    rebaseline=True)
+        self.assertEqual(propagate.classify_outcome(plan), propagate.FALLBACK)
+
+    def test_the_body_diffs_what_is_dropped_and_the_title_is_marked(self):
+        plan = propagate.plan_stamp(self.drifted_repo(), templates(),
+                                    {WF: "workflow v1\n"}, "0.7.0",
+                                    rebaseline=True)
+        body = propagate.pr_body("0.7.0", plan.files, plan.rebaselined, plan.writes)
+        body.encode("ascii")
+        self.assertIn("REBASELINE", body)
+        self.assertIn(f"a/{WF}", body)
+        self.assertIn("-workflow v1 with a hand-patched line", body)
+        self.assertIn("+workflow v2", body)
+        self.assertEqual(propagate.pr_title("0.7.0", plan),
+                         "factory-update to 0.7.0 (rebaseline)")
+
+    def test_a_plain_run_keeps_the_plain_title_and_no_diff_section(self):
+        plan = propagate.plan_stamp(current_repo_files(version="0.6.0"),
+                                    templates(), {}, "0.7.0")
+        body = propagate.pr_body("0.7.0", plan.files, plan.rebaselined, plan.writes)
+        self.assertNotIn("REBASELINE", body)
+        self.assertEqual(propagate.pr_title("0.7.0", plan),
+                         "factory-update to 0.7.0")
+
+    def test_a_long_diff_is_truncated_with_a_note(self):
+        old_file = "".join(f"old line {i}\n" for i in range(400))
+        new_file = "".join(f"new line {i}\n" for i in range(400))
+        diff = propagate.rebaseline_diff({WF: old_file}, {WF: new_file}, limit=50)
+        self.assertLessEqual(len(diff.splitlines()), 52)
+        self.assertIn("diff truncated after 50 lines", diff)
+
+    def test_rebaseline_is_refused_outside_a_manual_dispatch(self):
+        import os
+        for event, allowed in (("workflow_dispatch", True), ("push", False),
+                               ("schedule", False), ("", True)):
+            with self.subTest(event=event):
+                os.environ["GITHUB_EVENT_NAME"] = event
+                self.addCleanup(os.environ.pop, "GITHUB_EVENT_NAME", None)
+                self.assertEqual(propagate.rebaseline_allowed(), allowed)
+
+
 class TestTokenHandling(unittest.TestCase):
     """The token reaches consumer repos' issue bodies and the job summary
     through command output, so it must never enter a URL or a captured stream."""
