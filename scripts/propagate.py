@@ -486,13 +486,27 @@ def open_or_update_pr(slug: str, branch: str, base: str, version: str,
     return f"opened {created.stdout.strip().splitlines()[-1]}"
 
 
+def find_open_issue(slug: str, version: str) -> str | None:
+    """URL of an already-open update issue for this version, or None.
+
+    Only the fallback path may ask this. An issue left over from the old
+    responder route says nothing about whether the deterministic route works,
+    so letting it decide earlier would strand a repo that a PR could fix.
+    """
+    existing = gh_json(["issue", "list", "-R", slug, "--state", "open",
+                        "--search", f'"factory-update to {version}" in:title',
+                        "--json", "number,url"]) or []
+    return existing[0]["url"] if existing else None
+
+
 def file_fallback_issue(slug: str, version: str, stamped: str | None,
                         reason: str) -> str:
     title = f"factory-update to {version}"
-    existing = gh_json(["issue", "list", "-R", slug, "--state", "open",
-                        "--search", f'"{title}" in:title', "--json", "number,url"]) or []
+    existing = find_open_issue(slug, version)
     if existing:
-        return f"issue already open: {existing[0]['url']}"
+        # Keep the reason: the open issue predates this run and does not
+        # explain why the deterministic route stepped aside this time.
+        return f"issue already open: {existing} ({reason})"
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as handle:
         handle.write(issue_body(version, stamped, reason))
         body_file = handle.name
@@ -516,6 +530,55 @@ def try_fallback_issue(slug: str, version: str, stamped: str | None,
         return file_fallback_issue(slug, version, stamped, reason)
     except Exception as exc:  # noqa: BLE001 - boundary handler, see docstring
         return f"could not file issue: {redact(str(exc))[:200]}"
+
+
+def fallback_detail(slug: str, version: str, stamped: str | None, reason: str,
+                    dry_run: bool) -> str:
+    """The fallback outcome, decided in the same order in both modes: look for
+    an already-open issue first, then file one. A dry run reports what the real
+    run would do here and writes nothing."""
+    if not dry_run:
+        return try_fallback_issue(slug, version, stamped, reason)
+    try:
+        existing = find_open_issue(slug, version)
+    except Exception:  # noqa: BLE001 - a dry run reports, it never fails
+        existing = None
+    if existing:
+        return f"would file issue (already open: {existing}): {reason}"
+    return f"would file issue: {reason}"
+
+
+PERMISSION_HINTS = (
+    # (stage, marker in the error text, the PAT permission it points at)
+    ("push", "workflow", "Workflows: write"),
+    ("push", "", "Contents: write"),
+    ("pr", "", "Pull requests: write"),
+)
+
+
+def permission_hint(stage: str, stderr: str, files: list[str]) -> str:
+    """Which PAT permission a refusal most likely means is missing. GitHub's
+    refusals name the scope inconsistently, so this reads the stage and the
+    files being pushed as well as the message."""
+    lowered = stderr.lower()
+    if stage == "push" and (
+            "workflow" in lowered
+            or any(f.startswith(".github/workflows/") for f in files)):
+        return "Workflows: write"
+    if stage == "push":
+        return "Contents: write"
+    return "Pull requests: write"
+
+
+def push_failure_reason(stage: str, stderr: str, files: list[str]) -> str:
+    """One sentence an operator can act on: what failed, the likely missing
+    permission, and the redacted error itself."""
+    what = "the push" if stage == "push" else "PR creation"
+    if is_permission_error(stderr):
+        return (f"{what} was refused for permission reasons; the propagation "
+                f"token most likely lacks {permission_hint(stage, stderr, files)} "
+                f"on this repo: {stderr[:200]}")
+    return f"{what} failed: {stderr[:200]}"
 
 
 def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
@@ -542,22 +605,24 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
 
         outcome = classify_outcome(plan)
         if outcome == FALLBACK:
-            reason = fallback_reason(plan)
-            if dry_run:
-                return RepoResult(slug, stamped, FALLBACK, f"would file issue: {reason}")
             return RepoResult(slug, stamped, FALLBACK,
-                              try_fallback_issue(slug, version, stamped, reason))
+                              fallback_detail(slug, version, stamped,
+                                              fallback_reason(plan), dry_run))
 
         if outcome == UNCHANGED:
             return RepoResult(slug, stamped, UNCHANGED,
                               "stamp is a no-op; nothing to propagate")
 
         if dry_run:
+            # The one thing a dry run cannot decide is whether the push and the
+            # PR call are permitted; say so rather than promise a PR.
             note = f" (rebaselining {len(plan.rebaselined)})" if plan.rebaselined else ""
             return RepoResult(slug, stamped, CHANGED,
-                              f"would push {branch} and open a PR{note}: "
+                              f"would push {branch} and open a PR{note}, "
+                              f"falling back only if that is refused: "
                               f"{', '.join(plan.files)}")
 
+        stage = "push"
         try:
             run(["git", "checkout", "-b", branch], cwd=checkout)
             apply_plan(checkout, plan)
@@ -577,15 +642,15 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                 cwd=checkout, check=False, redact_secret=token, env=auth)
             run(["git", "push", "--force-with-lease", "origin", branch],
                 cwd=checkout, redact_secret=token, env=auth)
+            stage = "pr"
             detail = open_or_update_pr(slug, branch, base, version, plan)
         except CommandError as exc:
-            reason = ("push or PR creation was refused for permission reasons: "
-                      if is_permission_error(exc.stderr) else "push or PR creation failed: ")
-            reason += exc.stderr[:200]
+            reason = push_failure_reason(stage, exc.stderr, plan.files)
             outcome = classify_outcome(plan, push_error=reason)
             return RepoResult(slug, stamped, outcome,
-                              try_fallback_issue(slug, version, stamped,
-                                                 fallback_reason(plan, reason)))
+                              fallback_detail(slug, version, stamped,
+                                              fallback_reason(plan, reason),
+                                              dry_run))
         note = f", {len(plan.rebaselined)} rebaselined" if plan.rebaselined else ""
         return RepoResult(slug, stamped, CHANGED,
                           f"{detail} ({len(plan.files)} files{note})")
