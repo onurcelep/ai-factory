@@ -111,9 +111,18 @@ a stamped file it cannot explain (a workflow matching neither the current
 template nor the one that repo was stamped from, an unparseable
 `.claude/settings.json`, a CLAUDE.md with no marker block), or if the push
 or PR creation is refused, propagation files the old `@claude` update
-issue there instead, with the reason in the body. No repo is left silently
-unprocessed, and the job summary lists every repo with its outcome
-(changed / unchanged / fallback / current / ahead).
+issue there instead, with the reason in the body. A refusal names the PAT
+permission it most likely means is missing (Contents, Workflows, or Pull
+requests), so the fix is in the report rather than in the run log. An
+update issue left over from an earlier run is reused rather than
+duplicated, and the reason this run fell back is reported alongside it. No
+repo is left silently unprocessed, and the job summary lists every repo
+with its outcome (changed / unchanged / fallback / current / ahead).
+
+The dry run makes the same decisions in the same order, including the
+already-open-issue lookup, so its report matches what a real run does. The
+one thing it cannot decide is whether the push and the PR call are
+permitted, and it says so instead of promising a PR.
 
 Requirements in consumer repos (all standard): the stamped `claude.yml`
 (so @claude can answer a fallback issue), the Claude GitHub App, and the

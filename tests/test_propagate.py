@@ -273,6 +273,142 @@ class TestRebaseline(unittest.TestCase):
                 self.assertEqual(propagate.rebaseline_allowed(), allowed)
 
 
+class TestDecisionOrder(unittest.TestCase):
+    """An issue left over from the old responder route says nothing about
+    whether the deterministic route works, so it must never be consulted
+    before the push, and a dry run must follow the same order as a real run."""
+
+    def setUp(self):
+        # Capture before any test swaps it: restoring a stub would leak into
+        # every later test in the file.
+        real = propagate.find_open_issue
+        self.addCleanup(setattr, propagate, "find_open_issue", real)
+
+    def seeded_consumer(self, tmp, files):
+        origin = tmp / "origin.git"
+        subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)],
+                       check=True, capture_output=True)
+        seed = tmp / "seed"
+        subprocess.run(["git", "clone", str(origin), str(seed)],
+                       check=True, capture_output=True)
+        for name, content in files.items():
+            path = seed / name
+            path.parent.mkdir(parents=True, exist_ok=True)
+            path.write_text(content)
+        subprocess.run(["git", "add", "-A"], cwd=seed, check=True, capture_output=True)
+        subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e",
+                        "commit", "-m", "seed"], cwd=seed, check=True, capture_output=True)
+        subprocess.run(["git", "push", "origin", "main"], cwd=seed,
+                       check=True, capture_output=True)
+        return origin
+
+    def recorded_run(self, origin, gh_replies):
+        """Route clones at the local bare repo and stub gh, recording the order
+        of the calls that matter."""
+        calls = []
+        real = propagate.run
+
+        def fake(cmd, cwd=None, check=True, redact_secret=None, env=None):
+            calls.append(" ".join(cmd[:3]))
+            if cmd[0] == "git" and cmd[1] == "clone":
+                cmd = [str(origin) if c.startswith("https://") else c for c in cmd]
+                cmd = [c for c in cmd if c != "--filter=blob:none"]
+            if cmd[0] == "gh":
+                key = " ".join(cmd[1:3])
+                return subprocess.CompletedProcess(cmd, 0, gh_replies.get(key, "[]"), "")
+            return real(cmd, cwd=cwd, check=check, redact_secret=redact_secret, env=env)
+
+        propagate.run = fake
+        self.addCleanup(setattr, propagate, "run", real)
+        return calls
+
+    def test_the_issue_lookup_never_precedes_the_push(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            files = dict(current_repo_files(version="0.6.0"))
+            origin = self.seeded_consumer(tmp, files)
+            calls = self.recorded_run(origin, {
+                # a leftover issue exists, and must not be consulted at all
+                "issue list": '[{"number": 15, "url": "https://x/issues/15"}]',
+                "pr list": "[]",
+                "pr create": "https://x/pull/1",
+            })
+            result = propagate.propagate_repo("o/consumer", None, "0.7.0", ROOT,
+                                              templates(), "tok", dry_run=False)
+        self.assertEqual(result.outcome, propagate.CHANGED)
+        self.assertNotIn("issue list", calls)
+        self.assertIn("git push --force-with-lease", calls)
+        self.assertLess(calls.index("git push --force-with-lease"),
+                        calls.index("gh pr list"))
+
+    def test_a_leftover_issue_no_longer_hides_why_we_fell_back(self):
+        propagate.find_open_issue = lambda *_: "https://x/issues/15"
+        detail = propagate.file_fallback_issue("o/r", "0.7.0", "0.6.0",
+                                               "the push was refused")
+        self.assertTrue(detail.startswith("issue already open:"))
+        self.assertIn("the push was refused", detail)
+
+    def test_dry_run_and_real_run_take_the_same_fallback_branch(self):
+        propagate.find_open_issue = lambda *_: None
+        dry = propagate.fallback_detail("o/r", "0.7.0", "0.6.0", "drifted", True)
+        self.assertEqual(dry, "would file issue: drifted")
+
+        propagate.find_open_issue = lambda *_: "https://x/issues/15"
+        dry = propagate.fallback_detail("o/r", "0.7.0", "0.6.0", "drifted", True)
+        self.assertEqual(dry,
+                         "would file issue (already open: https://x/issues/15): drifted")
+        real = propagate.file_fallback_issue("o/r", "0.7.0", "0.6.0", "drifted")
+        # Same decision, same evidence: only the side effect differs.
+        self.assertIn("https://x/issues/15", real)
+        self.assertIn("drifted", real)
+
+    def test_a_dry_run_does_not_promise_a_pr_it_cannot_verify(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            origin = self.seeded_consumer(tmp, dict(current_repo_files(version="0.6.0")))
+            self.recorded_run(origin, {})
+            result = propagate.propagate_repo("o/consumer", None, "0.7.0", ROOT,
+                                              templates(), "tok", dry_run=True)
+        self.assertEqual(result.outcome, propagate.CHANGED)
+        self.assertIn("falling back only if that is refused", result.detail)
+
+
+class TestPermissionHints(unittest.TestCase):
+    WF = ".github/workflows/claude.yml"
+
+    def test_a_refused_workflow_push_names_workflows_write(self):
+        reason = propagate.push_failure_reason(
+            "push", "refusing to allow a PAT to create or update workflow "
+                    "`.github/workflows/claude.yml` without `workflows` permission",
+            [self.WF])
+        self.assertIn("Workflows: write", reason)
+
+    def test_a_refused_plain_push_names_contents_write(self):
+        reason = propagate.push_failure_reason(
+            "push", "remote: Permission to o/r.git denied. 403", ["CLAUDE.md"])
+        self.assertIn("Contents: write", reason)
+
+    def test_a_refused_pr_creation_names_pull_requests_write(self):
+        reason = propagate.push_failure_reason(
+            "pr", "GraphQL: Resource not accessible by personal access token",
+            ["CLAUDE.md"])
+        self.assertIn("Pull requests: write", reason)
+
+    def test_a_non_permission_failure_gets_no_hint(self):
+        reason = propagate.push_failure_reason("push", "could not resolve host",
+                                               ["CLAUDE.md"])
+        self.assertNotIn("most likely lacks", reason)
+        self.assertIn("could not resolve host", reason)
+
+    def test_the_hint_stays_redacted(self):
+        token = "ghp_hint_secret"
+        propagate._SECRET = token
+        self.addCleanup(setattr, propagate, "_SECRET", None)
+        stderr = propagate.redact(f"403 denied for {token}")
+        reason = propagate.push_failure_reason("push", stderr, [self.WF])
+        self.assertNotIn(token, reason)
+
+
 class TestTokenHandling(unittest.TestCase):
     """The token reaches consumer repos' issue bodies and the job summary
     through command output, so it must never enter a URL or a captured stream."""
