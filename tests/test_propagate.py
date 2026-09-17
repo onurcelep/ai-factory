@@ -336,7 +336,9 @@ class TestDecisionOrder(unittest.TestCase):
             result = propagate.propagate_repo("o/consumer", None, "0.7.0", ROOT,
                                               templates(), "tok", dry_run=False)
         self.assertEqual(result.outcome, propagate.CHANGED)
-        self.assertNotIn("issue list", calls)
+        # The recorder stores joined argv prefixes, so the needle must be the
+        # whole prefix: a substring here would match nothing and never fail.
+        self.assertNotIn("gh issue list", calls)
         self.assertIn("git push --force-with-lease", calls)
         self.assertLess(calls.index("git push --force-with-lease"),
                         calls.index("gh pr list"))
