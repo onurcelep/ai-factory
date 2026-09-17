@@ -127,6 +127,12 @@ grep -q 'factory:version' "$PS" || fail "propagation must read the version stamp
 # The stamping semantics have one home (golden-tested); propagation calls it.
 grep -q 'import factory_stamp' "$PS" || fail "propagation must reuse scripts/lib/factory_stamp.py, not reimplement stamping"
 grep -q 'dry.run' "$PS" || fail "propagation must offer a dry run (plan only, no writes)"
+# Rebaseline discards a consumer's local edits, so it stays an operator
+# decision: dispatch-only in the script, and reviewable as a diff in the PR.
+grep -q 'FACTORY_PROPAGATE_REBASELINE' "$PS" || fail "propagation must gate rebaselining on FACTORY_PROPAGATE_REBASELINE"
+grep -q 'FACTORY_PROPAGATE_REBASELINE' "$PW" || fail "propagate workflow must pass the rebaseline input through"
+grep -q 'workflow_dispatch' "$PS" || fail "propagation must refuse rebaselining outside a manual workflow_dispatch"
+grep -q 'rebaseline' docs/OPERATIONS.md || fail "OPERATIONS.md must document the rebaseline recovery path"
 # Invariant 2 (docs/SECURITY-MODEL.md): merge is the one irreversible step and
 # it is always a human's. Propagation opens PRs; it never merges one.
 grep -qE '"merge"|--auto|gh pr merge' "$PS" && fail "propagation must never merge a PR (SECURITY-MODEL invariant 2)"

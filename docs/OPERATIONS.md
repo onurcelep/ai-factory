@@ -127,6 +127,28 @@ python3 scripts/propagate.py` locally): it prints the per-repo plan, which
 files each PR would carry, and which repos would fall back, without
 writing anything anywhere.
 
+### Recovering a drifted repo (rebaseline)
+
+A repo whose stamped files were hand-patched at some point matches neither
+the current template nor the template it was stamped with, so every
+propagation reports it as a fallback and it never catches up. The one-time
+recovery is a manual dispatch with **rebaseline** checked (locally:
+`FACTORY_PROPAGATE_REBASELINE=1`). Under it, a stamped file that matches no
+template is overwritten with the current template instead of causing a
+fallback; files that already match take the normal path untouched.
+
+What you get: the PR is titled `factory-update to <version> (rebaseline)`
+and its body carries the unified diff of every overwritten file, old against
+new (truncated at 300 lines), so the local edits being dropped are in front
+of you at review time. Read that diff before merging. Anything worth keeping
+is re-applied on top of the PR, or belongs in ai-factory's template so the
+whole fleet gets it.
+
+Rebaseline never happens on the scheduled or push trigger: discarding a
+repo's local edits is an operator decision, and the script refuses the flag
+on any event other than `workflow_dispatch`. Pair it with the dry run first
+to see which files each repo would lose.
+
 **Workflow files ride along now.** GitHub still blocks *App-token* pushes
 that modify `.github/workflows/` (see
 [SECURITY-MODEL.md](SECURITY-MODEL.md) invariant 3), which is why the

@@ -18,12 +18,17 @@ the templates) is a fallback, not a guess.
 
 Dry run: `--dry-run` (or FACTORY_PROPAGATE_DRY_RUN=1) prints the per-repo plan
 and writes nothing anywhere.
+
+Rebaseline: `--rebaseline` (or FACTORY_PROPAGATE_REBASELINE=1, manual dispatch
+only) takes over stamped files that match no template the repo could have been
+stamped with, instead of falling back. The PR body diffs what is dropped.
 """
 
 from __future__ import annotations
 
 import argparse
 import base64
+import difflib
 import json
 import os
 import re
@@ -98,6 +103,10 @@ class StampPlan:
 
     writes: dict[str, str] = field(default_factory=dict)
     unreconcilable: list[str] = field(default_factory=list)
+    # target -> the content being overwritten, for files taken over by an
+    # explicit rebaseline. The PR body shows this as a diff: it is the only
+    # place the local edits being dropped are visible to the reviewer.
+    rebaselined: dict[str, str] = field(default_factory=dict)
 
     @property
     def files(self) -> list[str]:
@@ -105,17 +114,28 @@ class StampPlan:
 
 
 def plan_workflow(target: str, repo_file: str | None, template: str,
-                  baseline: str | None, plan: StampPlan) -> None:
+                  baseline: str | None, plan: StampPlan,
+                  rebaseline: bool = False) -> None:
     """A workflow file is reconcilable only when the repo's copy is a template
     copy: identical to the new one (nothing to do) or to the one it was stamped
-    from (a clean upgrade). Anything else carries repo-owned edits the
-    mechanical stamp would destroy."""
+    from (a clean upgrade). Anything else carries local edits the mechanical
+    stamp would destroy, so it is refused.
+
+    `rebaseline` is the one-time escape from that refusal, for a repo whose
+    stamped files were hand-patched across versions and can therefore never
+    match a baseline again: the template wins and the dropped content is
+    recorded for the PR body. It is an operator decision per run, never a
+    default.
+    """
     if repo_file is None:
         plan.writes[target] = template  # new standard file
     elif repo_file == template:
         pass
     elif baseline is not None and repo_file == baseline:
         plan.writes[target] = template
+    elif rebaseline:
+        plan.writes[target] = template
+        plan.rebaselined[target] = repo_file
     else:
         plan.unreconcilable.append(
             f"{target}: modified locally (matches neither the current template "
@@ -123,7 +143,8 @@ def plan_workflow(target: str, repo_file: str | None, template: str,
 
 
 def plan_stamp(repo_files: dict[str, str | None], templates: dict[str, str],
-               baselines: dict[str, str | None], version: str) -> StampPlan:
+               baselines: dict[str, str | None], version: str,
+               rebaseline: bool = False) -> StampPlan:
     """Compute the whole stamp as a set of file writes. Pure: callers supply
     file contents, so this is fully testable without a repo."""
     plan = StampPlan()
@@ -131,7 +152,7 @@ def plan_stamp(repo_files: dict[str, str | None], templates: dict[str, str],
     for target, template in sorted(templates.items()):
         if target.startswith(".github/workflows/"):
             plan_workflow(target, repo_files.get(target), template,
-                          baselines.get(target), plan)
+                          baselines.get(target), plan, rebaseline)
 
     settings_template = templates.get(SETTINGS)
     current = repo_files.get(SETTINGS)
@@ -196,11 +217,57 @@ def fallback_reason(plan: StampPlan, push_error: str | None = None) -> str:
     return push_error or ""
 
 
-def pr_body(version: str, files: list[str]) -> str:
+DIFF_LIMIT = 300
+
+
+def rebaseline_diff(rebaselined: dict[str, str], writes: dict[str, str],
+                    limit: int = DIFF_LIMIT) -> str:
+    """Unified diffs of what a rebaseline drops, for the PR body. Truncated:
+    the point is for a human to see the local edits being discarded, and an
+    unbounded diff is one nobody reads (and a body GitHub may reject)."""
+    lines: list[str] = []
+    for target in sorted(rebaselined):
+        lines.extend(difflib.unified_diff(
+            rebaselined[target].splitlines(),
+            writes.get(target, "").splitlines(),
+            fromfile=f"a/{target} (this repo)",
+            tofile=f"b/{target} (template)",
+            lineterm=""))
+    if not lines:
+        return ""
+    dropped = max(0, len(lines) - limit)
+    shown = lines[:limit]
+    body = "\n".join(shown)
+    if dropped:
+        body += (f"\n... diff truncated after {limit} lines, {dropped} more. "
+                 "Compare the branch against this PR's base to see the rest.")
+    return body
+
+
+def pr_body(version: str, files: list[str],
+            rebaselined: dict[str, str] | None = None,
+            writes: dict[str, str] | None = None) -> str:
     """Plain-ASCII PR body. No trailers, no generated-with line."""
     listing = "\n".join(f"- {f}" for f in files)
+    rebase_note = ""
+    if rebaselined:
+        diff = rebaseline_diff(rebaselined, writes or {})
+        names = "\n".join(f"- {f}" for f in sorted(rebaselined))
+        rebase_note = f"""
+
+REBASELINE: the files below did not match any template this repo could have
+been stamped with, so propagation was run with the rebaseline option and
+overwrote them with the current template. Local edits in them are dropped by
+this PR. Read the diff before merging; anything worth keeping must be
+re-applied on top, or belongs in ai-factory's template.
+
+{names}
+
+```diff
+{diff}
+```"""
     return f"""Automatic propagation from ai-factory: this restamps the standard
-files from the templates at plugin version {version}.
+files from the templates at plugin version {version}.{rebase_note}
 
 Files in this PR:
 
@@ -387,18 +454,32 @@ def apply_plan(work: Path, plan: StampPlan) -> None:
         path.write_text(content, encoding="utf-8")
 
 
+def pr_title(version: str, plan: StampPlan) -> str:
+    """The rebaseline suffix is part of the title on purpose: the PR list is
+    where an operator decides what needs a careful read."""
+    return (f"factory-update to {version} (rebaseline)" if plan.rebaselined
+            else f"factory-update to {version}")
+
+
 def open_or_update_pr(slug: str, branch: str, base: str, version: str,
-                      files: list[str]) -> str:
+                      plan: StampPlan) -> str:
     existing = gh_json(["pr", "list", "-R", slug, "--head", branch,
                         "--state", "open", "--json", "number,url"]) or []
-    if existing:
-        return f"updated {existing[0]['url']}"
+    title = pr_title(version, plan)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as handle:
-        handle.write(pr_body(version, files))
+        handle.write(pr_body(version, plan.files, plan.rebaselined, plan.writes))
         body_file = handle.name
     try:
+        if existing:
+            url = existing[0]["url"]
+            # A rerun that rebaselines must not leave the earlier run's title
+            # and body standing: they would hide the dropped edits.
+            if plan.rebaselined:
+                run(["gh", "pr", "edit", url, "--title", title,
+                     "--body-file", body_file])
+            return f"updated {url}"
         created = run(["gh", "pr", "create", "-R", slug, "--base", base,
-                       "--head", branch, "--title", f"factory-update to {version}",
+                       "--head", branch, "--title", title,
                        "--body-file", body_file])
     finally:
         os.unlink(body_file)
@@ -438,7 +519,8 @@ def try_fallback_issue(slug: str, version: str, stamped: str | None,
 
 
 def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
-                   templates: dict[str, str], token: str, dry_run: bool) -> RepoResult:
+                   templates: dict[str, str], token: str, dry_run: bool,
+                   rebaseline: bool = False) -> RepoResult:
     """Stamp one consumer repo. Never raises: every failure becomes a fallback."""
     name = slug.split("/")[-1]
     branch = f"factory-update/{version}"
@@ -456,7 +538,7 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                    cwd=checkout).stdout.strip()
         repo_files = read_repo_files(checkout, list(templates))
         baselines = baseline_targets(root, stamped)
-        plan = plan_stamp(repo_files, templates, baselines, version)
+        plan = plan_stamp(repo_files, templates, baselines, version, rebaseline)
 
         outcome = classify_outcome(plan)
         if outcome == FALLBACK:
@@ -471,8 +553,10 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                               "stamp is a no-op; nothing to propagate")
 
         if dry_run:
+            note = f" (rebaselining {len(plan.rebaselined)})" if plan.rebaselined else ""
             return RepoResult(slug, stamped, CHANGED,
-                              f"would push {branch} and open a PR: {', '.join(plan.files)}")
+                              f"would push {branch} and open a PR{note}: "
+                              f"{', '.join(plan.files)}")
 
         try:
             run(["git", "checkout", "-b", branch], cwd=checkout)
@@ -481,7 +565,7 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
             run(["git",
                  "-c", f"user.name={GIT_AUTHOR_NAME}",
                  "-c", f"user.email={GIT_AUTHOR_EMAIL}",
-                 "commit", "-m", f"factory-update to {version}",
+                 "commit", "-m", pr_title(version, plan),
                  "-m", "Restamp the ai-factory standard files from the templates "
                        "at this version. Mechanical stamp only; repo-owned "
                        "content is untouched."], cwd=checkout)
@@ -493,7 +577,7 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                 cwd=checkout, check=False, redact_secret=token, env=auth)
             run(["git", "push", "--force-with-lease", "origin", branch],
                 cwd=checkout, redact_secret=token, env=auth)
-            detail = open_or_update_pr(slug, branch, base, version, plan.files)
+            detail = open_or_update_pr(slug, branch, base, version, plan)
         except CommandError as exc:
             reason = ("push or PR creation was refused for permission reasons: "
                       if is_permission_error(exc.stderr) else "push or PR creation failed: ")
@@ -502,7 +586,9 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
             return RepoResult(slug, stamped, outcome,
                               try_fallback_issue(slug, version, stamped,
                                                  fallback_reason(plan, reason)))
-        return RepoResult(slug, stamped, CHANGED, f"{detail} ({len(plan.files)} files)")
+        note = f", {len(plan.rebaselined)} rebaselined" if plan.rebaselined else ""
+        return RepoResult(slug, stamped, CHANGED,
+                          f"{detail} ({len(plan.files)} files{note})")
     finally:
         shutil.rmtree(work, ignore_errors=True)
 
@@ -531,6 +617,18 @@ def consumer_repos(owner: str, self_name: str, limit: int,
     return found
 
 
+def rebaseline_allowed() -> bool:
+    """Discarding a consumer's local edits is an operator decision, so it rides
+    only on an explicit manual dispatch. A scheduled or push-triggered run that
+    somehow carries the flag ignores it and says so."""
+    event = os.environ.get("GITHUB_EVENT_NAME", "")
+    if event and event != "workflow_dispatch":
+        print(f"::notice::rebaseline ignored: this is a {event} run, and "
+              "rebaselining is available only on a manual workflow_dispatch.")
+        return False
+    return True
+
+
 def write_summary(results: list[RepoResult]) -> None:
     path = os.environ.get("GITHUB_STEP_SUMMARY")
     lines = ["| Repo | Stamped | Outcome | Detail |", "|---|---|---|---|"]
@@ -555,7 +653,12 @@ def main() -> int:
     ap.add_argument("--dry-run", action="store_true",
                     default=os.environ.get("FACTORY_PROPAGATE_DRY_RUN") == "1",
                     help="print the per-repo plan; write nothing anywhere")
+    ap.add_argument("--rebaseline", action="store_true",
+                    default=os.environ.get("FACTORY_PROPAGATE_REBASELINE") == "1",
+                    help="overwrite stamped files that match no template instead "
+                         "of falling back; the PR body diffs what is dropped")
     args = ap.parse_args()
+    rebaseline = args.rebaseline and rebaseline_allowed()
 
     global _SECRET
     token = os.environ.get("GH_TOKEN", "")
@@ -571,8 +674,9 @@ def main() -> int:
     version = args.version or json.loads((ROOT / PLUGIN_JSON).read_text())["version"]
     templates = template_targets(ROOT)
     only = [n for n in args.only.split(",") if n]
-    print(f"Propagating factory v{version} for owner {args.owner}"
-          f"{' (dry run)' if args.dry_run else ''}")
+    modes = "".join([" (dry run)" if args.dry_run else "",
+                     " (rebaseline)" if rebaseline else ""])
+    print(f"Propagating factory v{version} for owner {args.owner}{modes}")
 
     results: list[RepoResult] = []
     try:
@@ -584,7 +688,7 @@ def main() -> int:
                                           "no update" if state == AHEAD else ""))
                 continue
             results.append(propagate_repo(slug, stamped, version, ROOT, templates,
-                                          token, args.dry_run))
+                                          token, args.dry_run, rebaseline))
     finally:
         # The summary is the only record of what happened to the repos already
         # processed; an exception must never take it down with it.
