@@ -252,11 +252,58 @@ class CommandError(RuntimeError):
         super().__init__(f"{cmd[0]} {' '.join(cmd[1:3])} failed: {self.stderr[:400]}")
 
 
+# Set once per run so a call that omits redact_secret cannot leak the
+# token: command output travels into issue bodies filed in consumer repos and
+# into the job summary, both of which outlive the run.
+_SECRET: str | None = None
+
+
+def basic_auth(token: str) -> str:
+    """The Authorization header value git uses for a GitHub token."""
+    return base64.b64encode(f"x-access-token:{token}".encode()).decode()
+
+
+def redact(text: str, secret: str | None = None) -> str:
+    """Blank the token and its basic-auth encoding out of `text`."""
+    secret = secret if secret is not None else _SECRET
+    if not secret or not text:
+        return text
+    for form in (secret, basic_auth(secret)):
+        text = text.replace(form, "***")
+    return text
+
+
+def clone_url(slug: str) -> str:
+    """The remote URL to clone. Deliberately credential-free: a URL with the
+    token in it lands in remote.origin.url and in every transport error message
+    git prints."""
+    return f"https://github.com/{slug}.git"
+
+
+def git_env(token: str) -> dict[str, str]:
+    """Credentials for one git invocation, the way actions/checkout supplies
+    them: an http.extraheader config passed through the environment, so the
+    token reaches neither the command line (argv is world-readable) nor any
+    config file the clone leaves behind."""
+    return {
+        **os.environ,
+        "GIT_CONFIG_COUNT": "1",
+        "GIT_CONFIG_KEY_0": "http.extraheader",
+        "GIT_CONFIG_VALUE_0": f"AUTHORIZATION: basic {basic_auth(token)}",
+        "GIT_TERMINAL_PROMPT": "0",
+    }
+
+
 def run(cmd: list[str], cwd: Path | None = None, check: bool = True,
-        redact: str | None = None) -> subprocess.CompletedProcess:
-    shown = [c.replace(redact, "***") for c in cmd] if redact else cmd
-    print(f"  $ {' '.join(shown)}", flush=True)
-    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True)
+        redact_secret: str | None = None,
+        env: dict[str, str] | None = None) -> subprocess.CompletedProcess:
+    print(f"  $ {' '.join(redact(c, redact_secret) for c in cmd)}", flush=True)
+    result = subprocess.run(cmd, cwd=cwd, capture_output=True, text=True, env=env)
+    # Redact before anything can store or forward the streams.
+    result = subprocess.CompletedProcess(
+        cmd, result.returncode,
+        redact(result.stdout or "", redact_secret),
+        redact(result.stderr or "", redact_secret))
     if check and result.returncode != 0:
         raise CommandError(cmd, result)
     return result
@@ -376,6 +423,20 @@ def file_fallback_issue(slug: str, version: str, stamped: str | None,
     return f"filed {created.stdout.strip().splitlines()[-1]}"
 
 
+def try_fallback_issue(slug: str, version: str, stamped: str | None,
+                       reason: str) -> str:
+    """File the fallback issue, or say why it could not be filed. Filing can
+    fail on its own (Issues disabled, a PAT without Issues: write, a malformed
+    gh response). This is the fleet loop's boundary: any failure here becomes a
+    reported outcome, never an exception that abandons the remaining repos, so
+    the catch is deliberately broad.
+    """
+    try:
+        return file_fallback_issue(slug, version, stamped, reason)
+    except Exception as exc:  # noqa: BLE001 - boundary handler, see docstring
+        return f"could not file issue: {redact(str(exc))[:200]}"
+
+
 def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                    templates: dict[str, str], token: str, dry_run: bool) -> RepoResult:
     """Stamp one consumer repo. Never raises: every failure becomes a fallback."""
@@ -383,11 +444,11 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
     branch = f"factory-update/{version}"
     work = Path(tempfile.mkdtemp(prefix=f"propagate-{name}-"))
     checkout = work / "repo"
+    auth = git_env(token)
     try:
-        url = f"https://x-access-token:{token}@github.com/{slug}.git"
         try:
-            run(["git", "clone", "--filter=blob:none", "--single-branch", url,
-                 str(checkout)], redact=token)
+            run(["git", "clone", "--filter=blob:none", "--single-branch",
+                 clone_url(slug), str(checkout)], redact_secret=token, env=auth)
         except CommandError as exc:
             return RepoResult(slug, stamped, FALLBACK, f"clone failed: {exc.stderr[:200]}")
 
@@ -403,7 +464,7 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
             if dry_run:
                 return RepoResult(slug, stamped, FALLBACK, f"would file issue: {reason}")
             return RepoResult(slug, stamped, FALLBACK,
-                              file_fallback_issue(slug, version, stamped, reason))
+                              try_fallback_issue(slug, version, stamped, reason))
 
         if outcome == UNCHANGED:
             return RepoResult(slug, stamped, UNCHANGED,
@@ -429,8 +490,9 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
             # nothing else.
             run(["git", "fetch", "origin",
                  f"+refs/heads/{branch}:refs/remotes/origin/{branch}"],
-                cwd=checkout, check=False)
-            run(["git", "push", "--force-with-lease", "origin", branch], cwd=checkout)
+                cwd=checkout, check=False, redact_secret=token, env=auth)
+            run(["git", "push", "--force-with-lease", "origin", branch],
+                cwd=checkout, redact_secret=token, env=auth)
             detail = open_or_update_pr(slug, branch, base, version, plan.files)
         except CommandError as exc:
             reason = ("push or PR creation was refused for permission reasons: "
@@ -438,8 +500,8 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
             reason += exc.stderr[:200]
             outcome = classify_outcome(plan, push_error=reason)
             return RepoResult(slug, stamped, outcome,
-                              file_fallback_issue(slug, version, stamped,
-                                                  fallback_reason(plan, reason)))
+                              try_fallback_issue(slug, version, stamped,
+                                                 fallback_reason(plan, reason)))
         return RepoResult(slug, stamped, CHANGED, f"{detail} ({len(plan.files)} files)")
     finally:
         shutil.rmtree(work, ignore_errors=True)
@@ -495,7 +557,9 @@ def main() -> int:
                     help="print the per-repo plan; write nothing anywhere")
     args = ap.parse_args()
 
+    global _SECRET
     token = os.environ.get("GH_TOKEN", "")
+    _SECRET = token or None
     if not token:
         print("::notice::FACTORY_PROPAGATE_TOKEN not set - skipping propagation. "
               "See docs/OPERATIONS.md to enable.")
@@ -511,16 +575,20 @@ def main() -> int:
           f"{' (dry run)' if args.dry_run else ''}")
 
     results: list[RepoResult] = []
-    for slug, stamped in consumer_repos(args.owner, args.self_name, args.limit, only):
-        state = staleness(stamped, version)
-        if state in (CURRENT, AHEAD):
-            results.append(RepoResult(slug, stamped, state,
-                                      "no update" if state == AHEAD else ""))
-            continue
-        results.append(propagate_repo(slug, stamped, version, ROOT, templates,
-                                      token, args.dry_run))
-
-    write_summary(results)
+    try:
+        for slug, stamped in consumer_repos(args.owner, args.self_name,
+                                            args.limit, only):
+            state = staleness(stamped, version)
+            if state in (CURRENT, AHEAD):
+                results.append(RepoResult(slug, stamped, state,
+                                          "no update" if state == AHEAD else ""))
+                continue
+            results.append(propagate_repo(slug, stamped, version, ROOT, templates,
+                                          token, args.dry_run))
+    finally:
+        # The summary is the only record of what happened to the repos already
+        # processed; an exception must never take it down with it.
+        write_summary(results)
     unprocessed = [r for r in results
                    if r.outcome == FALLBACK and not r.detail.startswith(
                        ("filed", "issue already open", "would file"))]

@@ -5,7 +5,9 @@ so the changed / unchanged / fallback decision is testable without cloning,
 pushing, or talking to GitHub.
 """
 import json
+import subprocess
 import sys
+import tempfile
 import unittest
 from pathlib import Path
 
@@ -181,6 +183,108 @@ class TestPlanBoundaries(unittest.TestCase):
         self.assertTrue(merged["enabledPlugins"]["factory@onur"])  # wiring added
         self.assertEqual(
             merged["extraKnownMarketplaces"]["onur"]["source"]["ref"], "v0.6.0")
+
+
+class TestTokenHandling(unittest.TestCase):
+    """The token reaches consumer repos' issue bodies and the job summary
+    through command output, so it must never enter a URL or a captured stream."""
+
+    TOKEN = "ghp_exampletoken1234567890"
+
+    def test_clone_url_carries_no_credentials(self):
+        url = propagate.clone_url("owner/repo")
+        self.assertNotIn("@", url)
+        self.assertNotIn(self.TOKEN, url)
+
+    def test_credentials_travel_in_the_environment_not_the_command(self):
+        env = propagate.git_env(self.TOKEN)
+        self.assertEqual(env["GIT_CONFIG_KEY_0"], "http.extraheader")
+        self.assertIn(propagate.basic_auth(self.TOKEN), env["GIT_CONFIG_VALUE_0"])
+        self.assertNotIn(self.TOKEN, env["GIT_CONFIG_VALUE_0"])  # encoded, not raw
+
+    def test_command_error_stderr_is_redacted(self):
+        with self.assertRaises(propagate.CommandError) as caught:
+            propagate.run(["sh", "-c", f"echo {self.TOKEN} >&2; exit 3"],
+                          redact_secret=self.TOKEN)
+        self.assertNotIn(self.TOKEN, caught.exception.stderr)
+        self.assertIn("***", caught.exception.stderr)
+        # and it stays redacted all the way into the filed issue body
+        body = propagate.issue_body("0.7.0", "0.6.0",
+                                    f"push refused: {caught.exception.stderr}")
+        self.assertNotIn(self.TOKEN, body)
+
+    def test_basic_auth_form_is_redacted_too(self):
+        encoded = propagate.basic_auth(self.TOKEN)
+        self.assertEqual(propagate.redact(f"header: {encoded}", self.TOKEN),
+                         "header: ***")
+
+    def test_clone_leaves_no_token_in_the_repo_config(self):
+        """Real clone through the same helpers: remote.origin.url and the
+        on-disk config must come out credential-free."""
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            origin = tmp / "origin.git"
+            subprocess.run(["git", "init", "--bare", "-b", "main", str(origin)],
+                           check=True, capture_output=True)
+            seed = tmp / "seed"
+            subprocess.run(["git", "clone", str(origin), str(seed)],
+                           check=True, capture_output=True)
+            (seed / "README.md").write_text("hello\n")
+            subprocess.run(["git", "add", "-A"], cwd=seed, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e",
+                            "commit", "-m", "seed"], cwd=seed, check=True,
+                           capture_output=True)
+            subprocess.run(["git", "push", "origin", "main"], cwd=seed,
+                           check=True, capture_output=True)
+
+            checkout = tmp / "clone"
+            propagate.run(["git", "clone", "--single-branch", str(origin),
+                           str(checkout)], redact_secret=self.TOKEN,
+                          env=propagate.git_env(self.TOKEN))
+            url = propagate.run(["git", "config", "--get", "remote.origin.url"],
+                                cwd=checkout).stdout
+            self.assertNotIn(self.TOKEN, url)
+            self.assertNotIn(self.TOKEN, (checkout / ".git" / "config").read_text())
+
+
+class TestFallbackIssueGuard(unittest.TestCase):
+    """Filing the fallback issue can fail on its own (Issues disabled, a PAT
+    without Issues: write). That must not abort the fleet loop."""
+
+    def setUp(self):
+        self._real = propagate.file_fallback_issue
+        self.addCleanup(setattr, propagate, "file_fallback_issue", self._real)
+
+    def test_a_failed_filing_becomes_a_visible_outcome(self):
+        def boom(*_args, **_kwargs):
+            raise propagate.CommandError(
+                ["gh", "issue", "create"],
+                subprocess.CompletedProcess([], 1, "", "403 Issues are disabled"))
+        propagate.file_fallback_issue = boom
+        detail = propagate.try_fallback_issue("o/r", "0.7.0", "0.6.0", "push refused")
+        self.assertTrue(detail.startswith("could not file issue:"))
+        self.assertIn("403", detail)
+        # the unprocessed filter in main() keys off exactly this prefix
+        self.assertFalse(detail.startswith(("filed", "issue already open", "would file")))
+
+    def test_a_failed_filing_is_redacted(self):
+        token = "ghp_secret_value_42"
+        propagate._SECRET = token
+        self.addCleanup(setattr, propagate, "_SECRET", None)
+
+        def boom(*_args, **_kwargs):
+            raise RuntimeError(f"remote rejected for {token}")
+        propagate.file_fallback_issue = boom
+        detail = propagate.try_fallback_issue("o/r", "0.7.0", "0.6.0", "push refused")
+        self.assertNotIn(token, detail)
+
+    def test_the_summary_survives_a_crash_in_the_loop(self):
+        """write_summary runs in a finally, so results collected before an
+        exception still reach the job summary."""
+        source = (ROOT / "scripts" / "propagate.py").read_text()
+        body = source[source.index("def main()"):]
+        self.assertIn("finally:", body)
+        self.assertLess(body.index("finally:"), body.index("write_summary(results)"))
 
 
 class TestBodies(unittest.TestCase):
