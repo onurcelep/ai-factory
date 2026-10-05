@@ -521,6 +521,16 @@ class TestBodies(unittest.TestCase):
         self.assertIn(WF, body)
         self.assertIn("review", body.lower())
 
+    def test_pr_body_claims_the_review_skip_only_when_it_applies(self):
+        """The anti-tamper skip fires on the review workflow only. Announcing
+        it on a PR that does not touch that file trains the reader to wave off
+        a review check that is actually running."""
+        with_review = propagate.pr_body("0.7.0", [propagate.REVIEW_WORKFLOW])
+        self.assertIn("refuses to run a workflow file", with_review)
+        without = propagate.pr_body("0.7.0", [".github/workflows/claude.yml",
+                                              propagate.CLAUDE_MD])
+        self.assertNotIn("refuses to run a workflow file", without)
+
     def test_fallback_issue_body_carries_the_reason_and_tags_claude(self):
         body = propagate.issue_body("0.7.0", "0.6.0", "push refused: 403")
         self.assertTrue(body.startswith("@claude"))

@@ -23,13 +23,22 @@ by artifacts and by the result JSON in the run log:
 - **Honest failures** (`error_max_turns`, push 403) report as failures;
   read the last comment for what blocked it.
 - **Ran healthy, posted nothing:** `is_error: false`, real turns and cost —
-  and zero comments/reviews on the PR. The agent was blocked from acting
-  (typically permission denials: check `permission_denials_count` in the
-  result JSON) and "completed" by narrating. The review assertion fails
-  this case explicitly since 0.6.7; treat the PR as not reviewed and
-  retry with a new push. A `permission_denials_count` over ~20 on any
-  run means the agent's instructions and its tool allowlist disagree —
-  see the role contracts in ai-factory's `docs/SECURITY-MODEL.md`.
+  and zero comments/reviews on the PR. The review assertion fails this
+  case explicitly since 0.6.7; treat the PR as not reviewed and retry with
+  a new push. `permission_denials_count` in the result JSON splits it into
+  two causes with opposite fixes, and the self-report comment names which:
+  - **Denials > 0: blocked from acting**, and the agent "completed" by
+    narrating. Over ~20 means the agent's instructions and its tool
+    allowlist disagree — see the role contracts in ai-factory's
+    `docs/SECURITY-MODEL.md`.
+  - **Denials == 0: it could post and chose not to.** `/code-review` opens
+    with an eligibility gate that stops without posting on PRs it reads as
+    automated or trivially correct, and a propagation PR says exactly that
+    in its own body — a few turns, a fifth of a dollar, no comment. The
+    review prompt overrides the gate since 0.6.13; a recurrence means the
+    override needs strengthening, and rotating the token or widening the
+    allowlist fixes nothing. Read the agent's stated reason in the
+    preserved execution log.
 - **Anti-tamper skip (looks dead, is not):** whenever a PR's
   `claude*.yml` workflow file differs from the default branch's copy, the
   action refuses to run and produces an instant no-artifact run. The
