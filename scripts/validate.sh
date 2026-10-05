@@ -239,6 +239,18 @@ done
 grep -q 'Self-reports' plugins/factory/skills/ci-agent-ops/SKILL.md || fail "ci-agent-ops must document the self-reports"
 ok "CI self-reporting"
 
+# --- Review eligibility: the workflow decides, the agent does not ---
+# /code-review opens with a gate that stops without posting on PRs it reads as
+# automated or trivially correct. A propagation PR announces itself as exactly
+# that in its own body, so the gate fires, nothing is posted, and the artifact
+# assertion turns a healthy run red. The job's `if:` is the only eligibility
+# decision this workflow delegates; the prompt has to say so.
+grep -q 'eligibility gate' "$T/claude-code-review.yml" || fail "review prompt must override /code-review's eligibility gate (a declined review posts nothing and the artifact assertion turns it red)"
+# Blocked from posting and chose not to post are the same symptom with opposite
+# fixes; a report that names only one sends the operator at the wrong thing.
+grep -q 'Zero denials' "$T/claude-code-review.yml" || fail "the posted-nothing report must tell zero denials (agent declined) apart from denials (agent blocked)"
+ok "review eligibility override"
+
 # --- Role contracts: instructions × permissions must reconcile ---
 # Incident 2026-07-12: a change-agent gate in CLAUDE.md sent the read-only
 # reviewer into 56 permission denials and it posted no review under a green
