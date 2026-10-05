@@ -47,6 +47,10 @@ TEMPLATES = "plugins/factory/templates"
 PLUGIN_JSON = "plugins/factory/.claude-plugin/plugin.json"
 
 CLAUDE_MD = "CLAUDE.md"
+# The one propagated file whose presence in a PR makes the action skip its own
+# review run (anti-tamper: it refuses a workflow file that differs from the
+# default branch). Named here so the PR body claims the skip only when true.
+REVIEW_WORKFLOW = ".github/workflows/claude-code-review.yml"
 # The stamp marker a repo must carry to be part of the fleet (the full begin
 # marker, minus the parenthetical, lives in factory_stamp.BEGIN).
 STAMP_MARKER = "factory:standard:begin"
@@ -249,6 +253,17 @@ def pr_body(version: str, files: list[str],
             writes: dict[str, str] | None = None) -> str:
     """Plain-ASCII PR body. No trailers, no generated-with line."""
     listing = "\n".join(f"- {f}" for f in files)
+    # Stated only when it applies: a PR that carries no review-workflow change
+    # IS reviewed, and telling the reader otherwise teaches them to wave off a
+    # check that is doing its job.
+    skip_note = ""
+    if REVIEW_WORKFLOW in files:
+        skip_note = """
+
+This PR changes the review workflow, so the automatic review check does not
+run on it: the action refuses to run a workflow file that differs from the
+default branch. That skip reports green with a notice, and the review runs
+normally on the next PR after this one merges."""
     rebase_note = ""
     if rebaselined:
         diff = rebaseline_diff(rebaselined, writes or {})
@@ -275,12 +290,7 @@ Files in this PR:
 
 Workflow files under .github/workflows/ are included. Propagation pushes
 with a PAT that carries the workflow scope, so the manual follow-up step
-that used to accompany a template change is gone.
-
-If this PR changes the review workflow, the automatic review check does
-not run on it: the action refuses to run a workflow file that differs
-from the default branch. That skip reports green with a notice, and the
-review runs normally on the next PR after this one merges.
+that used to accompany a template change is gone.{skip_note}
 
 Nothing here is merged automatically. Review and merge as usual.
 """
