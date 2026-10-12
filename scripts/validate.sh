@@ -114,6 +114,13 @@ grep -q "github.com/$SLUG" plugins/factory/templates/claude.yml || fail "claude.
 grep -q "github.com/$SLUG" plugins/factory/templates/claude-code-review.yml || fail "review template must reference the $SLUG marketplace URL"
 ok "workflow plugin self-loading (repo $SLUG)"
 
+# --- Fix: agent workflows run subagents in the foreground ---
+for f in claude.yml claude-code-review.yml; do
+  grep -q '"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"' "$T/$f" || fail "$f template must disable background tasks via the settings input"
+done
+grep -q 'Async agent launched' "$T/claude-code-review.yml" || fail "the posted-nothing report must name backgrounded subagents as a cause"
+ok "agent workflows disable background subagents"
+
 # --- Propagation + operations doc ---
 PW=.github/workflows/factory-propagate.yml
 PS=scripts/propagate.py
