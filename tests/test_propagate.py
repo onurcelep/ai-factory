@@ -338,10 +338,73 @@ class TestDecisionOrder(unittest.TestCase):
         self.assertEqual(result.outcome, propagate.CHANGED)
         # The recorder stores joined argv prefixes, so the needle must be the
         # whole prefix: a substring here would match nothing and never fail.
+        # The push carries its lease value, so it is found by prefix instead.
         self.assertNotIn("gh issue list", calls)
-        self.assertIn("git push --force-with-lease", calls)
-        self.assertLess(calls.index("git push --force-with-lease"),
-                        calls.index("gh pr list"))
+        pushes = [i for i, c in enumerate(calls)
+                  if c.startswith("git push --force-with-lease=")]
+        self.assertEqual(len(pushes), 1, calls)
+        self.assertLess(pushes[0], calls.index("gh pr list"))
+
+    def test_a_rerun_updates_its_own_open_pr_instead_of_falling_back(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            origin = self.seeded_consumer(tmp, dict(current_repo_files(version="0.6.0")))
+            # An earlier run already pushed the update branch and opened its PR.
+            seed = tmp / "seed"
+            subprocess.run(["git", "checkout", "-b", "factory-update/0.7.0"],
+                           cwd=seed, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e",
+                            "commit", "--allow-empty", "-m", "earlier run"],
+                           cwd=seed, check=True, capture_output=True)
+            subprocess.run(["git", "push", "origin", "factory-update/0.7.0"],
+                           cwd=seed, check=True, capture_output=True)
+            self.recorded_run(origin, {
+                "pr list": '[{"number": 7, "url": "https://x/pull/7"}]',
+            })
+            result = propagate.propagate_repo("o/consumer", None, "0.7.0", ROOT,
+                                              templates(), "tok", dry_run=False)
+            pushed = subprocess.run(
+                ["git", "log", "-1", "--format=%s", "factory-update/0.7.0"],
+                cwd=origin, check=True, capture_output=True, text=True).stdout.strip()
+        self.assertEqual(result.outcome, propagate.CHANGED, result.detail)
+        self.assertIn("updated https://x/pull/7", result.detail)
+        self.assertNotEqual(pushed, "earlier run")
+
+    def test_the_lease_still_refuses_a_branch_moved_after_the_fetch(self):
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp = Path(tmp)
+            origin = self.seeded_consumer(tmp, dict(current_repo_files(version="0.6.0")))
+            seed = tmp / "seed"
+            subprocess.run(["git", "checkout", "-b", "factory-update/0.7.0"],
+                           cwd=seed, check=True, capture_output=True)
+            subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e",
+                            "commit", "--allow-empty", "-m", "earlier run"],
+                           cwd=seed, check=True, capture_output=True)
+            subprocess.run(["git", "push", "origin", "factory-update/0.7.0"],
+                           cwd=seed, check=True, capture_output=True)
+            calls = self.recorded_run(origin, {"pr list": "[]"})
+            real = propagate.run
+
+            def move_branch_after_fetch(cmd, **kwargs):
+                result = real(cmd, **kwargs)
+                if cmd[:2] == ["git", "fetch"]:
+                    subprocess.run(["git", "-c", "user.name=t", "-c", "user.email=t@e",
+                                    "commit", "--allow-empty", "-m", "someone else"],
+                                   cwd=seed, check=True, capture_output=True)
+                    subprocess.run(["git", "push", "origin", "factory-update/0.7.0"],
+                                   cwd=seed, check=True, capture_output=True)
+                return result
+
+            propagate.run = move_branch_after_fetch
+            propagate.find_open_issue = lambda *_: "https://x/issues/9"
+            result = propagate.propagate_repo("o/consumer", None, "0.7.0", ROOT,
+                                              templates(), "tok", dry_run=False)
+            pushed = subprocess.run(
+                ["git", "log", "-1", "--format=%s", "factory-update/0.7.0"],
+                cwd=origin, check=True, capture_output=True, text=True).stdout.strip()
+        self.assertEqual(result.outcome, propagate.FALLBACK)
+        self.assertEqual(pushed, "someone else")
+        self.assertIn("git push", " ".join(calls))
 
     def test_a_leftover_issue_no_longer_hides_why_we_fell_back(self):
         propagate.find_open_issue = lambda *_: "https://x/issues/15"
