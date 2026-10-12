@@ -120,6 +120,8 @@ for f in claude.yml claude-code-review.yml; do
 done
 grep -q 'Async agent launched' "$T/claude-code-review.yml" || fail "the posted-nothing report must name backgrounded subagents as a cause"
 ok "agent workflows disable background subagents"
+grep -q 'minimizeComment' "$T/claude-code-review.yml" || fail "review template must collapse superseded review comments"
+ok "review template collapses superseded reviews"
 
 # --- Propagation + operations doc ---
 PW=.github/workflows/factory-propagate.yml
