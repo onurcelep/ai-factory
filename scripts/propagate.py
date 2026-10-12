@@ -644,13 +644,20 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                  "-m", "Restamp the ai-factory standard files from the templates "
                        "at this version. Mechanical stamp only; repo-owned "
                        "content is untouched."], cwd=checkout)
-            # Fetch the remote branch first so --force-with-lease has a lease
-            # to check: reruns for the same version update their own PR and
-            # nothing else.
+            # Fetch the remote branch first so the lease has a value to check:
+            # reruns for the same version update their own PR and nothing else.
+            # The expected value must be explicit. The clone is single-branch,
+            # so its fetch refspec does not map this branch and a bare
+            # --force-with-lease rejects every rerun as stale. An empty value
+            # means the branch must not exist yet.
             run(["git", "fetch", "origin",
                  f"+refs/heads/{branch}:refs/remotes/origin/{branch}"],
                 cwd=checkout, check=False, redact_secret=token, env=auth)
-            run(["git", "push", "--force-with-lease", "origin", branch],
+            expected = run(["git", "rev-parse", "--verify", "--quiet",
+                            f"refs/remotes/origin/{branch}"],
+                           cwd=checkout, check=False).stdout.strip()
+            run(["git", "push", f"--force-with-lease=refs/heads/{branch}:{expected}",
+                 "origin", branch],
                 cwd=checkout, redact_secret=token, env=auth)
             stage = "pr"
             detail = open_or_update_pr(slug, branch, base, version, plan)
