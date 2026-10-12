@@ -25,8 +25,10 @@ by artifacts and by the result JSON in the run log:
 - **Ran healthy, posted nothing:** `is_error: false`, real turns and cost —
   and zero comments/reviews on the PR. The review assertion fails this
   case explicitly since 0.6.7; treat the PR as not reviewed and retry with
-  a new push. `permission_denials_count` in the result JSON splits it into
-  two causes with opposite fixes, and the self-report comment names which:
+  a new push. The denial count in the result JSON (the `permission_denials`
+  list; older action versions reported `permission_denials_count`) splits
+  it into two causes with opposite fixes, and the self-report comment names
+  which:
   - **Denials > 0: blocked from acting**, and the agent "completed" by
     narrating. Over ~20 means the agent's instructions and its tool
     allowlist disagree — see the role contracts in ai-factory's
@@ -39,6 +41,13 @@ by artifacts and by the result JSON in the run log:
     override needs strengthening, and rotating the token or widening the
     allowlist fixes nothing. Read the agent's stated reason in the
     preserved execution log.
+
+  Check one signature before trusting either branch, at any denial count:
+  if the agent's final result text says it is *waiting* on subagents and
+  its `Agent` calls were answered "Async agent launched", the run ended
+  with backgrounded subagents still pending. The agent workflows set
+  `CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1` through the action's `settings`
+  input to prevent this since 0.6.14; check it is still there.
 - **Anti-tamper skip (looks dead, is not):** whenever a PR's
   `claude*.yml` workflow file differs from the default branch's copy, the
   action refuses to run and produces an instant no-artifact run. The

@@ -65,6 +65,11 @@ jobs:
           # so allowing it would hand this job the whole write surface of its
           # token. Trust boundary: docs/SECURITY-MODEL.md (review row).
           claude_args: '--model opus --allowedTools "Bash(gh pr view:*),Bash(gh pr diff:*),Bash(gh pr comment:*),Bash(gh pr review:*),Bash(git diff:*),Bash(git log:*),Bash(git show:*),Bash(grep:*),Bash(wc:*),Bash(cat:*),Bash(head:*),Bash(tail:*)"'
+          # Headless runs must not background subagents: the run can end with
+          # their results still pending, so the agent posts nothing and only
+          # narrates that it is waiting. Foreground subagents block until done.
+          settings: |
+            {"env": {"CLAUDE_CODE_DISABLE_BACKGROUND_TASKS": "1"}}
           # The Action does not load the repo's .claude/settings.json (it is
           # stripped from the runner's checkout), so plugins must be
           # self-loaded via these inputs rather than relying on settings.json.
@@ -183,7 +188,9 @@ jobs:
           # proves a REVIEW happened. Require one artifact from the app bot
           # on any of the three surfaces (excluding this step's own
           # self-report comment).
-          DENIALS=$(jq -r '.permission_denials_count // 0' <<<"$RESULT")
+          # Older action versions reported a count; current ones report the
+          # denied calls as a permission_denials array. Accept either.
+          DENIALS=$(jq -r '.permission_denials_count // (.permission_denials | if type == "array" then length else 0 end)' <<<"$RESULT")
           echo "high_denials=$([ "${DENIALS:-0}" -gt 20 ] && echo true || echo false)" >> "$GITHUB_OUTPUT"
           # Exact bot login (-F -x): a substring match would false-positive on
           # any user with "claude" in the name and silently rot if it did.
@@ -200,7 +207,12 @@ jobs:
             # the agent was blocked from posting, or it was able to post and
             # chose not to. Naming the wrong one sends the operator rotating a
             # healthy token or widening an allowlist that was never the problem.
-            if [ "${DENIALS:-0}" -eq 0 ]; then
+            # A third cause is checked first because it occurs at any denial
+            # count: subagents that were backgrounded and never awaited.
+            BACKGROUNDED=$(jq '[.. | objects | select(.type? == "tool_result") | .content | tostring | select(test("Async agent launched"))] | length' "$EXECUTION_FILE" 2>/dev/null || echo 0)
+            if [ "${BACKGROUNDED:-0}" -gt 0 ]; then
+              CAUSE="$BACKGROUNDED subagent call(s) ran in the background, so the run ended with their results pending and nothing to post. The workflow's settings input must set CLAUDE_CODE_DISABLE_BACKGROUND_TASKS=1; check it is still there. Nothing about the token or the allowlist."
+            elif [ "${DENIALS:-0}" -eq 0 ]; then
               CAUSE="Zero denials, so the agent could post and chose not to — the review command's eligibility gate declining the PR as automated or trivial is the known case. The prompt overrides that gate, so a recurrence means the override needs strengthening; nothing about the token or the allowlist. The preserved execution log carries the agent's own stated reason."
             else
               CAUSE="$DENIALS permission denials, so the agent was blocked from acting and \"completed\" by narrating. Check the workflow's --allowedTools against what CLAUDE.md tells agents to do."
