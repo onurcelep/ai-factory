@@ -9,14 +9,17 @@ scripts/test-stamping.sh (golden-file diffs), and so the skills can point at a
 reference instead of only prose.
 
 It deliberately covers ONLY the mechanical parts — it does not decide build
-commands, inspect repos, talk to git/gh, or generate prose. Those judgement
-calls stay with the skill/LLM.
+commands, inspect repos, talk to a git repository or gh, or generate prose.
+Those judgement calls stay with the skill/LLM. (`merge-workflow` shells out to
+`git merge-file`, which merges three plain files and reads no repository.)
 
 Transforms:
   init-claude    Stamp CLAUDE.md (the three cases from factory-init step 4).
   update-splice  Replace the marker-fenced standard block (factory-update step 4).
   merge-settings Merge the template's marketplace + plugin wiring into an
                  existing .claude/settings.json, preserving repo-owned keys.
+  merge-workflow Three-way merge a template change into a workflow file that
+                 carries repo-owned edits.
 
 Every transform is a pure function of its inputs and is idempotent: applying it
 to its own output is a no-op. scripts/test-stamping.sh asserts that too.
@@ -24,8 +27,11 @@ to its own output is a no-op. scripts/test-stamping.sh asserts that too.
 
 import argparse
 import json
+import os
 import re
+import subprocess
 import sys
+import tempfile
 
 # The markers are a hard contract shared with the templates and both skills.
 # Verbatim, including the em dash.
@@ -133,8 +139,50 @@ def merge_settings(target: dict, template: dict) -> dict:
     return target
 
 
+def merge_workflow(base: str, ours: str, theirs: str) -> tuple[str, bool]:
+    """Three-way merge of a stamped workflow file: apply the template's change
+    (`base` -> `theirs`) to the repo's copy (`ours`), keeping the repo's edits.
+
+    `base` must be the template the repo's copy was stamped from. Returns
+    (text, clean). When the two sides changed the same lines, `clean` is False
+    and `text` carries conflict markers: it is for a human to resolve, never to
+    write to a repo as-is.
+
+    Idempotent: with the result as `ours` and `theirs` as the new `base`, the
+    merge returns the result unchanged.
+    """
+    with tempfile.TemporaryDirectory(prefix="factory-merge-") as tmp:
+        paths = []
+        for name, content in (("ours", ours), ("base", base), ("theirs", theirs)):
+            path = os.path.join(tmp, name)
+            # Bytes, so line endings reach the merge exactly as given.
+            with open(path, "wb") as f:
+                f.write(content.encode("utf-8"))
+            paths.append(path)
+        try:
+            result = subprocess.run(
+                ["git", "merge-file", "-p", "--diff3",
+                 "-L", "this repo", "-L", "stamped-from template",
+                 "-L", "current template", *paths],
+                capture_output=True)
+        except OSError as e:
+            raise ValueError(f"cannot run git merge-file: {e}") from e
+    # Exit status: 0 clean, 1..127 the number of conflicts, anything else an error.
+    if not 0 <= result.returncode <= 127:
+        detail = result.stderr.decode("utf-8", "replace").strip()
+        raise ValueError(f"git merge-file failed: {detail}")
+    return result.stdout.decode("utf-8"), result.returncode == 0
+
+
 def _read(path: str) -> str:
     with open(path, encoding="utf-8") as f:
+        return f.read()
+
+
+def _read_exact(path: str) -> str:
+    """Like _read, without newline translation: a merge must not turn a file's
+    line endings into a whole-file change."""
+    with open(path, encoding="utf-8", newline="") as f:
         return f.read()
 
 
@@ -158,6 +206,14 @@ def main() -> int:
     p.add_argument("--template", required=True)
     p.add_argument("--target", required=True)
 
+    p = sub.add_parser("merge-workflow",
+                       help="three-way merge a template change into a workflow "
+                            "file; exits 1 with conflict markers on a conflict")
+    p.add_argument("--base", required=True,
+                   help="the template the target was stamped from")
+    p.add_argument("--target", required=True, help="the repo's workflow file")
+    p.add_argument("--template", required=True, help="the current template")
+
     args = ap.parse_args()
 
     try:
@@ -175,6 +231,15 @@ def main() -> int:
             template = json.loads(_read(args.template))
             merged = merge_settings(target, template)
             sys.stdout.write(json.dumps(merged, indent=2, ensure_ascii=False) + "\n")
+        elif args.cmd == "merge-workflow":
+            out, clean = merge_workflow(_read_exact(args.base),
+                                        _read_exact(args.target),
+                                        _read_exact(args.template))
+            sys.stdout.buffer.write(out.encode("utf-8"))
+            if not clean:
+                print("factory_stamp: the repo's edits conflict with the template "
+                      "change; resolve the markers by hand", file=sys.stderr)
+                return 1
     except ValueError as e:
         print(f"factory_stamp: {e}", file=sys.stderr)
         return 2
