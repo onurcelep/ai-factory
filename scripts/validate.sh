@@ -281,6 +281,10 @@ RA=$(grep -o -- '--allowedTools "[^"]*"' "$T/claude-code-review.yml" | sed 's/^-
 if printf '%s' "$RA" | tr ',' '\n' | grep -qxE 'Bash|Bash\(gh:\*\)'; then
   fail "review allowlist must stay scoped: no bare Bash, no Bash(gh:*)"
 fi
+# Since claude-code-action v1.0.273 sessions start in auto mode, where an
+# allowlist is advisory; only an explicit default permission mode keeps it a bound.
+grep -q -- "claude_args: '[^']*--permission-mode default" "$T/claude-code-review.yml" \
+  || fail "review workflow must pin --permission-mode default (auto mode makes --allowedTools advisory)"
 grep -q '"role": "readonly"' evals/cases/release-flow.json || fail "cross-role behavioral eval missing (release-flow role: readonly)"
 ok "role contracts"
 

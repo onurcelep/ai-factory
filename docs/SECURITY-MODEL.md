@@ -197,6 +197,11 @@ Workflows: write, and what it produces is a PR a human merges. See
   makes, with no general shell. The review pin is the tighter of the two
   (named `gh pr` subcommands, not `gh`), since a job with no `contents`
   write should not regain a general API client.
+  An allowlist only bounds a session that runs in the `default`
+  permission mode. Since `claude-code-action` v1.0.273 (2026-11-12),
+  sessions start in **auto mode**, where a safety review can approve calls
+  that no allow rule covers. Each pinned job therefore carries
+  `--permission-mode default` in its `claude_args`.
 - **`CLAUDE_TRUSTED_ACTORS` gate** — the job-level `if:` on the responder
   and review workflows (see above) that narrows "may trigger a run" to
   the repo owner plus an explicit allowlist, independent of GitHub write
@@ -212,6 +217,7 @@ what you are giving up:
 | Drop the `main` require-PR ruleset | Invariant 1 — agents can now push to `main` (their tokens already carry write). |
 | Widen `allowed_bots` to `'*'` or set `allowed_non_write_users` | The actor check — untrusted parties can drive a write-capable run. |
 | Widen frontier-audit `--allowedTools` (e.g. bare `Bash`) | The bound on the highest-injection-risk job — a fetched page can now propose arbitrary commands. |
+| Drop `--permission-mode default` from a pinned job's `claude_args` | The allowlist itself — under the action's auto-mode default it becomes advisory, and calls outside it can run. |
 | Widen review `--allowedTools` to `Bash(gh:*)` or bare `Bash` | The bound on an agent whose only input is an untrusted diff — `gh api` reaches every endpoint the token can write, undoing the read-only `permissions:` block. |
 | Give the workflow/App token `workflow` scope | Invariant 3 — agents can rewrite their own triggers and permissions. |
 | Merge PRs by bot/automation instead of a human | Invariant 2 — the one human checkpoint on irreversible change. This includes teaching propagation to merge the PRs it opens: it opens them precisely because a human has to see them. |
