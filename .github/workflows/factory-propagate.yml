@@ -3,10 +3,10 @@ name: Factory Propagate
 # When the stamped standard changes on main, restamp every factory-stamped
 # repo of this owner and open the update PR there directly: clone, run the
 # mechanical stamp, commit on factory-update/<version>, push, open the PR.
-# A repo the mechanical stamp cannot reconcile (locally modified stamped
-# files, no marker block) falls back to the old route, an @claude issue
-# asking the responder to run /factory-update. Nothing is merged
-# automatically: a human still merges every PR.
+# A repo the mechanical stamp cannot reconcile (local edits that conflict
+# with a template change, no marker block) falls back to the old route, an
+# @claude issue asking the responder to run /factory-update. Nothing is
+# merged automatically: a human still merges every PR.
 #
 # Requires the FACTORY_PROPAGATE_TOKEN secret: a fine-grained PAT with
 # Contents: write, Pull requests: write, Workflows: write and Issues: write
@@ -32,7 +32,7 @@ on:
         type: boolean
         default: false
       rebaseline:
-        description: 'Overwrite stamped files that match no template (drops their local edits; the PR body diffs them)'
+        description: 'Overwrite stamped files that cannot be merged (drops their local edits; the PR body diffs them)'
         type: boolean
         default: false
 
@@ -51,7 +51,8 @@ jobs:
         with:
           # Full history: the stamp compares each consumer's workflow files
           # against the template as of the version that repo was stamped from,
-          # so a locally modified file is never mistaken for a stale one.
+          # so a locally modified file is never mistaken for a stale one, and
+          # uses that template as the base for merging local edits forward.
           fetch-depth: 0
 
       - name: Stamp consumer repos and open their update PRs

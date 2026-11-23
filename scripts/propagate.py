@@ -12,16 +12,18 @@ route -- an `@claude` issue asking the responder to run `/factory-update` --
 with the reason in the body, so no repo is ever silently skipped.
 
 The stamp is mechanical only: workflow files, `.claude/settings.json` wiring,
-the marker-fenced CLAUDE.md block, and the memory index when absent. Anything
-needing judgement (AGENTS.md build/test commands, a repo that diverged from
-the templates) is a fallback, not a guess.
+the marker-fenced CLAUDE.md block, and the memory index when absent. A workflow
+file carrying local edits gets the template change three-way merged in; the PR
+body shows the edits it keeps. Anything needing judgement (AGENTS.md build/test
+commands, local edits that conflict with a template change) is a fallback, not
+a guess.
 
 Dry run: `--dry-run` (or FACTORY_PROPAGATE_DRY_RUN=1) prints the per-repo plan
 and writes nothing anywhere.
 
 Rebaseline: `--rebaseline` (or FACTORY_PROPAGATE_REBASELINE=1, manual dispatch
-only) takes over stamped files that match no template the repo could have been
-stamped with, instead of falling back. The PR body diffs what is dropped.
+only) takes over stamped files that cannot be merged, instead of falling back.
+The PR body diffs what is dropped.
 """
 
 from __future__ import annotations
@@ -111,6 +113,10 @@ class StampPlan:
     # explicit rebaseline. The PR body shows this as a diff: it is the only
     # place the local edits being dropped are visible to the reviewer.
     rebaselined: dict[str, str] = field(default_factory=dict)
+    # target -> the current template, for files whose local edits were kept by
+    # a three-way merge. The PR body diffs template against result, so the
+    # reviewer sees exactly where the file departs from the standard.
+    merged: dict[str, str] = field(default_factory=dict)
 
     @property
     def files(self) -> list[str]:
@@ -120,30 +126,51 @@ class StampPlan:
 def plan_workflow(target: str, repo_file: str | None, template: str,
                   baseline: str | None, plan: StampPlan,
                   rebaseline: bool = False) -> None:
-    """A workflow file is reconcilable only when the repo's copy is a template
-    copy: identical to the new one (nothing to do) or to the one it was stamped
-    from (a clean upgrade). Anything else carries local edits the mechanical
-    stamp would destroy, so it is refused.
+    """A template copy is replaced outright: identical to the new template
+    (nothing to do) or to the one it was stamped from (a clean upgrade).
+
+    A copy with local edits gets the template change three-way merged in, with
+    the stamped-from template as the merge base. The merge needs that base and
+    must be conflict-free; otherwise overwriting would destroy the local edits
+    and guessing a resolution is not mechanical, so the file is refused.
 
     `rebaseline` is the one-time escape from that refusal, for a repo whose
-    stamped files were hand-patched across versions and can therefore never
-    match a baseline again: the template wins and the dropped content is
-    recorded for the PR body. It is an operator decision per run, never a
-    default.
+    stamped-from template is unknown or whose edits conflict with the template
+    change: the template wins and the dropped content is recorded for the PR
+    body. It is an operator decision per run, never a default, and it never
+    overrides a merge that succeeds.
     """
     if repo_file is None:
         plan.writes[target] = template  # new standard file
-    elif repo_file == template:
-        pass
-    elif baseline is not None and repo_file == baseline:
+        return
+    if repo_file == template:
+        return
+    if baseline is not None and repo_file == baseline:
         plan.writes[target] = template
-    elif rebaseline:
+        return
+
+    if baseline is None:
+        refusal = "modified locally, and the template it was stamped from is unknown"
+    else:
+        try:
+            result, clean = factory_stamp.merge_workflow(baseline, repo_file, template)
+        except ValueError as exc:
+            refusal = f"modified locally, and the merge could not run ({exc})"
+        else:
+            if clean:
+                # The result can equal the repo's copy: its edits already
+                # contain the template change, so there is nothing to write.
+                if result != repo_file:
+                    plan.writes[target] = result
+                    plan.merged[target] = template
+                return
+            refusal = "local edits conflict with the template change"
+
+    if rebaseline:
         plan.writes[target] = template
         plan.rebaselined[target] = repo_file
     else:
-        plan.unreconcilable.append(
-            f"{target}: modified locally (matches neither the current template "
-            f"nor the one it was stamped from)")
+        plan.unreconcilable.append(f"{target}: {refusal}")
 
 
 def plan_stamp(repo_files: dict[str, str | None], templates: dict[str, str],
@@ -224,18 +251,18 @@ def fallback_reason(plan: StampPlan, push_error: str | None = None) -> str:
 DIFF_LIMIT = 300
 
 
-def rebaseline_diff(rebaselined: dict[str, str], writes: dict[str, str],
-                    limit: int = DIFF_LIMIT) -> str:
-    """Unified diffs of what a rebaseline drops, for the PR body. Truncated:
-    the point is for a human to see the local edits being discarded, and an
-    unbounded diff is one nobody reads (and a body GitHub may reject)."""
+def body_diff(old: dict[str, str], new: dict[str, str], old_label: str,
+              new_label: str, limit: int = DIFF_LIMIT) -> str:
+    """Unified diffs of each file in `old` against its entry in `new`, for the
+    PR body. Truncated: the point is for a human to read them, and an unbounded
+    diff is one nobody reads (and a body GitHub may reject)."""
     lines: list[str] = []
-    for target in sorted(rebaselined):
+    for target in sorted(old):
         lines.extend(difflib.unified_diff(
-            rebaselined[target].splitlines(),
-            writes.get(target, "").splitlines(),
-            fromfile=f"a/{target} (this repo)",
-            tofile=f"b/{target} (template)",
+            old[target].splitlines(),
+            new.get(target, "").splitlines(),
+            fromfile=f"a/{target} ({old_label})",
+            tofile=f"b/{target} ({new_label})",
             lineterm=""))
     if not lines:
         return ""
@@ -248,9 +275,22 @@ def rebaseline_diff(rebaselined: dict[str, str], writes: dict[str, str],
     return body
 
 
+def rebaseline_diff(rebaselined: dict[str, str], writes: dict[str, str],
+                    limit: int = DIFF_LIMIT) -> str:
+    """What a rebaseline drops: the repo's copy against the template."""
+    return body_diff(rebaselined, writes, "this repo", "template", limit)
+
+
+def merged_diff(merged: dict[str, str], writes: dict[str, str],
+                limit: int = DIFF_LIMIT) -> str:
+    """What a merge keeps: the template against the merged result."""
+    return body_diff(merged, writes, "template", "merged result", limit)
+
+
 def pr_body(version: str, files: list[str],
             rebaselined: dict[str, str] | None = None,
-            writes: dict[str, str] | None = None) -> str:
+            writes: dict[str, str] | None = None,
+            merged: dict[str, str] | None = None) -> str:
     """Plain-ASCII PR body. No trailers, no generated-with line."""
     listing = "\n".join(f"- {f}" for f in files)
     # Stated only when it applies: a PR that carries no review-workflow change
@@ -281,8 +321,26 @@ re-applied on top, or belongs in ai-factory's template.
 ```diff
 {diff}
 ```"""
+    merge_note = ""
+    if merged:
+        diff = merged_diff(merged, writes or {})
+        names = "\n".join(f"- {f}" for f in sorted(merged))
+        merge_note = f"""
+
+MERGED: the files below carry local edits, so the template change was
+three-way merged into them instead of overwriting them. The diff shows what
+each merged file keeps that the current template does not have. Check that
+every difference is one this repo means to keep: a textual merge can be clean
+and still wrong, and an edit the whole fleet should have belongs in
+ai-factory's template.
+
+{names}
+
+```diff
+{diff}
+```"""
     return f"""Automatic propagation from ai-factory: this restamps the standard
-files from the templates at plugin version {version}.{rebase_note}
+files from the templates at plugin version {version}.{rebase_note}{merge_note}
 
 Files in this PR:
 
@@ -411,10 +469,11 @@ def template_targets(root: Path) -> dict[str, str]:
 
 
 def baseline_targets(root: Path, version: str | None) -> dict[str, str | None]:
-    """The workflow templates as they were at `version`, so an untouched
-    consumer file can be told apart from a locally modified one. Empty when the
-    version cannot be located in history (then every differing file is treated
-    as modified: never clobber what we cannot explain)."""
+    """The workflow templates as they were at `version`: what tells an
+    untouched consumer file from a locally modified one, and the merge base
+    for the modified one. Empty when the version cannot be located in history
+    (then every differing file is refused: never clobber what we cannot
+    explain)."""
     if not version:
         return {}
     commits = run(["git", "log", "--format=%H", "--", PLUGIN_JSON],
@@ -465,10 +524,12 @@ def apply_plan(work: Path, plan: StampPlan) -> None:
 
 
 def pr_title(version: str, plan: StampPlan) -> str:
-    """The rebaseline suffix is part of the title on purpose: the PR list is
-    where an operator decides what needs a careful read."""
-    return (f"factory-update to {version} (rebaseline)" if plan.rebaselined
-            else f"factory-update to {version}")
+    """The suffix is part of the title on purpose: the PR list is where an
+    operator decides what needs a careful read."""
+    marks = [mark for mark, hit in (("rebaseline", plan.rebaselined),
+                                    ("local edits merged", plan.merged)) if hit]
+    suffix = f" ({', '.join(marks)})" if marks else ""
+    return f"factory-update to {version}{suffix}"
 
 
 def open_or_update_pr(slug: str, branch: str, base: str, version: str,
@@ -477,14 +538,16 @@ def open_or_update_pr(slug: str, branch: str, base: str, version: str,
                         "--state", "open", "--json", "number,url"]) or []
     title = pr_title(version, plan)
     with tempfile.NamedTemporaryFile("w", suffix=".md", delete=False) as handle:
-        handle.write(pr_body(version, plan.files, plan.rebaselined, plan.writes))
+        handle.write(pr_body(version, plan.files, plan.rebaselined, plan.writes,
+                             plan.merged))
         body_file = handle.name
     try:
         if existing:
             url = existing[0]["url"]
-            # A rerun that rebaselines must not leave the earlier run's title
-            # and body standing: they would hide the dropped edits.
-            if plan.rebaselined:
+            # A rerun that rebaselines or merges must not leave the earlier
+            # run's title and body standing: they would hide the dropped or
+            # kept edits.
+            if plan.rebaselined or plan.merged:
                 run(["gh", "pr", "edit", url, "--title", title,
                      "--body-file", body_file])
             return f"updated {url}"
@@ -626,7 +689,9 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
         if dry_run:
             # The one thing a dry run cannot decide is whether the push and the
             # PR call are permitted; say so rather than promise a PR.
-            note = f" (rebaselining {len(plan.rebaselined)})" if plan.rebaselined else ""
+            note = "".join([
+                f" (rebaselining {len(plan.rebaselined)})" if plan.rebaselined else "",
+                f" (merging local edits in {len(plan.merged)})" if plan.merged else ""])
             return RepoResult(slug, stamped, CHANGED,
                               f"would push {branch} and open a PR{note}, "
                               f"falling back only if that is refused: "
@@ -668,7 +733,9 @@ def propagate_repo(slug: str, stamped: str | None, version: str, root: Path,
                               fallback_detail(slug, version, stamped,
                                               fallback_reason(plan, reason),
                                               dry_run))
-        note = f", {len(plan.rebaselined)} rebaselined" if plan.rebaselined else ""
+        note = "".join([
+            f", {len(plan.rebaselined)} rebaselined" if plan.rebaselined else "",
+            f", {len(plan.merged)} merged with local edits" if plan.merged else ""])
         return RepoResult(slug, stamped, CHANGED,
                           f"{detail} ({len(plan.files)} files{note})")
     finally:
@@ -737,7 +804,7 @@ def main() -> int:
                     help="print the per-repo plan; write nothing anywhere")
     ap.add_argument("--rebaseline", action="store_true",
                     default=os.environ.get("FACTORY_PROPAGATE_REBASELINE") == "1",
-                    help="overwrite stamped files that match no template instead "
+                    help="overwrite stamped files that cannot be merged instead "
                          "of falling back; the PR body diffs what is dropped")
     args = ap.parse_args()
     rebaseline = args.rebaseline and rebaseline_allowed()
