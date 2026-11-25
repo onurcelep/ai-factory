@@ -285,6 +285,8 @@ fi
 # allowlist is advisory; only an explicit default permission mode keeps it a bound.
 grep -q -- "claude_args: '[^']*--permission-mode default" "$T/claude-code-review.yml" \
   || fail "review workflow must pin --permission-mode default (auto mode makes --allowedTools advisory)"
+grep -q -- '--permission-mode default' "$FA" \
+  || fail "frontier-audit must pin --permission-mode default (auto mode makes --allowedTools advisory)"
 grep -q '"role": "readonly"' evals/cases/release-flow.json || fail "cross-role behavioral eval missing (release-flow role: readonly)"
 ok "role contracts"
 
