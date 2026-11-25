@@ -273,6 +273,75 @@ class TestRebaseline(unittest.TestCase):
                 self.assertEqual(propagate.rebaseline_allowed(), allowed)
 
 
+class TestThreeWayMerge(unittest.TestCase):
+    """A workflow file with local edits takes the template change by three-way
+    merge, with the stamped-from template as the base. Only a conflict, or a
+    base that cannot be found, is still refused."""
+
+    BASE = "name: wf\non: push\n\njobs:\n  a:\n    steps:\n      - run: one\n"
+    TEMPLATE = BASE.replace("run: one", "run: two")
+    LOCAL = BASE.replace("on: push", "on: [push, workflow_dispatch]")
+    MERGED = TEMPLATE.replace("on: push", "on: [push, workflow_dispatch]")
+
+    def plan(self, repo_file, baselines=None, **kwargs):
+        repo = current_repo_files(version="0.6.0")
+        repo[WF] = repo_file
+        return propagate.plan_stamp(
+            repo, templates(**{WF: self.TEMPLATE}),
+            {WF: self.BASE} if baselines is None else baselines, "0.7.0", **kwargs)
+
+    def test_local_edits_survive_and_the_template_change_lands(self):
+        plan = self.plan(self.LOCAL)
+        self.assertEqual(plan.unreconcilable, [])
+        self.assertEqual(plan.writes[WF], self.MERGED)
+        self.assertEqual(plan.merged, {WF: self.TEMPLATE})
+        self.assertEqual(propagate.classify_outcome(plan), propagate.CHANGED)
+
+    def test_a_merged_file_merges_again_at_the_next_version(self):
+        """After a merge the repo's copy is no template copy; the next update
+        must still land, from the new stamped-from template."""
+        newer = self.TEMPLATE + "      - run: three\n"
+        repo = current_repo_files(version="0.7.0")
+        repo[WF] = self.MERGED
+        plan = propagate.plan_stamp(repo, templates(**{WF: newer}),
+                                    {WF: self.TEMPLATE}, "0.8.0")
+        self.assertEqual(plan.writes[WF], self.MERGED + "      - run: three\n")
+
+    def test_edits_that_already_contain_the_change_write_nothing(self):
+        plan = self.plan(self.MERGED)
+        self.assertNotIn(WF, plan.writes)
+        self.assertEqual(plan.merged, {})
+        self.assertEqual(plan.unreconcilable, [])
+
+    def test_conflicting_edits_are_refused_not_guessed(self):
+        plan = self.plan(self.BASE.replace("run: one", "run: local"))
+        self.assertNotIn(WF, plan.writes)
+        self.assertEqual(propagate.classify_outcome(plan), propagate.FALLBACK)
+        self.assertIn("conflict", propagate.fallback_reason(plan))
+
+    def test_without_a_merge_base_local_edits_are_refused(self):
+        plan = self.plan(self.LOCAL, baselines={})
+        self.assertNotIn(WF, plan.writes)
+        self.assertIn("unknown", propagate.fallback_reason(plan))
+
+    def test_rebaseline_does_not_override_a_clean_merge(self):
+        plan = self.plan(self.LOCAL, rebaseline=True)
+        self.assertEqual(plan.writes[WF], self.MERGED)
+        self.assertEqual(plan.rebaselined, {})
+
+    def test_the_body_diffs_what_is_kept_and_the_title_is_marked(self):
+        plan = self.plan(self.LOCAL)
+        body = propagate.pr_body("0.7.0", plan.files, plan.rebaselined,
+                                 plan.writes, plan.merged)
+        body.encode("ascii")
+        self.assertIn("MERGED", body)
+        self.assertIn("-on: push", body)
+        self.assertIn("+on: [push, workflow_dispatch]", body)
+        self.assertNotIn("run: one", body)  # the template change is not a kept edit
+        self.assertEqual(propagate.pr_title("0.7.0", plan),
+                         "factory-update to 0.7.0 (local edits merged)")
+
+
 class TestDecisionOrder(unittest.TestCase):
     """An issue left over from the old responder route says nothing about
     whether the deterministic route works, so it must never be consulted

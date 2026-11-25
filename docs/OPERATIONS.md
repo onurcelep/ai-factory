@@ -105,11 +105,20 @@ skips with a notice — propagation is opt-in.
 stays the human checkpoint it has always been
 ([SECURITY-MODEL.md](SECURITY-MODEL.md) invariant 2).
 
+**Local edits to a stamped workflow are kept.** A workflow file that is
+no longer a template copy gets the template change three-way merged into
+it (`git merge-file`, with the template the repo was stamped from as the
+merge base). The PR is titled `factory-update to <version> (local edits
+merged)` and its body diffs the current template against each merged
+file, so the edits the repo keeps are in front of you at review time. A
+textual merge can be clean and still wrong: read that diff before merging.
+
 **Fallback: the `@claude` issue, for repos the stamp cannot reconcile.**
 The deterministic path only applies mechanical transforms. If a repo has
-a stamped file it cannot explain (a workflow matching neither the current
-template nor the one that repo was stamped from, an unparseable
-`.claude/settings.json`, a CLAUDE.md with no marker block), or if the push
+a stamped file it cannot reconcile (a workflow whose local edits conflict
+with the template change, or whose stamped-from template cannot be found
+in history; an unparseable
+`.claude/settings.json`; a CLAUDE.md with no marker block), or if the push
 or PR creation is refused, propagation files the old `@claude` update
 issue there instead, with the reason in the body. A refusal names the PAT
 permission it most likely means is missing (Contents, Workflows, or Pull
@@ -138,13 +147,13 @@ writing anything anywhere.
 
 ### Recovering a drifted repo (rebaseline)
 
-A repo whose stamped files were hand-patched at some point matches neither
-the current template nor the template it was stamped with, so every
-propagation reports it as a fallback and it never catches up. The one-time
+A repo whose local workflow edits conflict with a template change, or
+whose stamped-from template cannot be found, is reported as a fallback by
+every propagation and never catches up. The one-time
 recovery is a manual dispatch with **rebaseline** checked (locally:
-`FACTORY_PROPAGATE_REBASELINE=1`). Under it, a stamped file that matches no
-template is overwritten with the current template instead of causing a
-fallback; files that already match take the normal path untouched.
+`FACTORY_PROPAGATE_REBASELINE=1`). Under it, a stamped file that cannot be
+merged is overwritten with the current template instead of causing a
+fallback; files that match or merge cleanly take the normal path untouched.
 
 What you get: the PR is titled `factory-update to <version> (rebaseline)`
 and its body carries the unified diff of every overwritten file, old against

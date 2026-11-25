@@ -1,0 +1,17 @@
+name: Example
+on:
+  pull_request:
+    types: [opened, synchronize]
+
+jobs:
+  review:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v5
+      - uses: example/agent-action@v1
+        with:
+          args: --model small --max-turns 10
+          extra_input: repo-owned
+      - name: Report
+        run: echo "finished"

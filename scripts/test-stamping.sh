@@ -152,4 +152,33 @@ ok "settings/pinned-merge preserves the stability pin"
 cmp -s "$TMP/pinned.json" "$TMP/pinned2.json" || fail "settings/pinned-merge not idempotent"
 ok "settings/pinned-merge idempotent"
 
+# --- Case 7: three-way merge of a workflow file that carries repo edits ---
+MX=$FX/merge
+"${STAMP[@]}" merge-workflow --base "$MX/base.yml" --target "$MX/target.yml" \
+  --template "$MX/template.yml" >"$TMP/merged.yml" \
+  || fail "workflow/merge must merge non-overlapping edits cleanly"
+check_or_regen "workflow/merge" "$MX/expected.yml" "$TMP/merged.yml"
+grep -qF 'extra_input: repo-owned' "$TMP/merged.yml" || fail "workflow/merge dropped the repo's edit"
+grep -qF 'checkout@v5' "$TMP/merged.yml" || fail "workflow/merge did not apply the template change"
+grep -qF 'checkout@v4' "$TMP/merged.yml" && fail "workflow/merge left the stale template line"
+ok "workflow/merge keeps the repo edit and applies the template change"
+# Idempotency: once merged, the current template is the new base, and merging
+# again changes nothing.
+"${STAMP[@]}" merge-workflow --base "$MX/template.yml" --target "$TMP/merged.yml" \
+  --template "$MX/template.yml" >"$TMP/merged2.yml" || fail "workflow/merge re-run must be clean"
+cmp -s "$TMP/merged.yml" "$TMP/merged2.yml" || fail "workflow/merge not idempotent"
+ok "workflow/merge idempotent"
+# An untouched copy merges to exactly the current template.
+"${STAMP[@]}" merge-workflow --base "$MX/base.yml" --target "$MX/base.yml" \
+  --template "$MX/template.yml" >"$TMP/pristine.yml" || fail "workflow/merge of a pristine copy must be clean"
+cmp -s "$MX/template.yml" "$TMP/pristine.yml" || fail "workflow/merge of a pristine copy must equal the template"
+ok "workflow/merge of a pristine copy equals the template"
+# Overlapping edits are a conflict: exit 1 and markers, never a guessed result.
+rc=0
+"${STAMP[@]}" merge-workflow --base "$MX/base.yml" --target "$MX/target-conflict.yml" \
+  --template "$MX/template.yml" >"$TMP/conflict.yml" 2>/dev/null || rc=$?
+[ "$rc" = 1 ] || fail "workflow/merge must exit 1 on a conflict (got $rc)"
+grep -q '^<<<<<<< this repo' "$TMP/conflict.yml" || fail "workflow/merge conflict output must carry markers"
+ok "workflow/merge reports overlapping edits as a conflict"
+
 echo "STAMPING TESTS PASSED"
